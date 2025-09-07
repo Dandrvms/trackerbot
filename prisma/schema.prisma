@@ -1,0 +1,35 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+
+}
+
+
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+
+model Users {
+    id Int @id @default(autoincrement())
+    chat_id String 
+    board Boards[] 
+    tracking Trackings[] 
+}
+
+model Boards {
+    id Int @id @default(autoincrement())
+    name String 
+    userId Int
+    user Users @relation(fields: [userId], references: [id])
+}
+
+model Trackings {
+    id Int @id @default(autoincrement())
+    postId Int
+    userId Int
+    content String?
+    user Users @relation(fields: [userId], references: [id])
+}
