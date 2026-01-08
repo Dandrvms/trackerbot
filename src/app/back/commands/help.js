@@ -13,5 +13,7 @@ export default (ctx) => {
         "/unsub - No más notificaciones\n" + 
         "/track - Notificar respuestas a un post\n" + 
         "/untrack - Dejar de seguir respuestas\n" + 
-        "/mysubs - Ver tablones suscritos y posts seguidos")
+        "/mysubs - Ver tablones suscritos y posts seguidos\n\n" +
+        "Aún faltan características, pero el bot está en desarrollo activo. " +
+        "Ten en cuenta que algunas de tus suscripciones podrían eliminarse si se requieren cambios en la base de datos.")
 }
