@@ -1,3 +1,5 @@
+//notificar de un comentario a un post específico
+
 import { prisma } from "@/libs/prisma"
 import { NextResponse } from "next/server";
 import bot from "@/app/back/bot";

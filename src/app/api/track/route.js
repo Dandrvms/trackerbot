@@ -1,3 +1,5 @@
+//notificar de un post en un tablón
+
 import { prisma } from "@/libs/prisma"
 import { NextResponse } from "next/server";
 import bot from "@/app/back/bot";

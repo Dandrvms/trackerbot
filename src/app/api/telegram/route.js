@@ -1,3 +1,5 @@
+//hook para recibir los mensajes de telegram
+
 import bot from "@/app/back/bot";
 
 export async function POST(req) {
