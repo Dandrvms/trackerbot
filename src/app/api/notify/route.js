@@ -3,9 +3,21 @@
 import { prisma } from "@/libs/prisma"
 import { NextResponse } from "next/server";
 import bot from "@/app/back/bot";
+import { Markup } from "telegraf";
+
 export async function POST(req, res) {
+
+
+    console.log("Req: ", req)
+    const token = req.headers.get('Authorization')?.split(' ')[1]
+    if (token !== process.env.WEB_TOKEN) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+
     const request = await req.json();
-    const { id, content, boardId } = request;
+    console.log("Request: ", request)
+    const { content , id, boardId } = request;
 
     if (!id || !content || !boardId) {
         console.log(request)
@@ -21,10 +33,13 @@ export async function POST(req, res) {
             }
         }
     })
-    const message = `Nuevo post en /${boardId}/:\n\nwbn Th. ${id}\n\n${content}\n\n[Ver post ↗](${process.env.WEB_URL}${boardId}#${id})`
+    const message = `Nuevo post en /${boardId}/:\n\nwbn Th. ${id}\n\n${content}`
+    const keyboard = Markup.inlineKeyboard([
+        [Markup.button.url('Ver post', `${process.env.BOARDS_URL}${boardId}#${id}`)]
+    ]);
     if(users){
         users.forEach(user => {
-            bot.telegram.sendMessage(user.chat_id, message, { parse_mode: "Markdown", disable_web_page_preview: true });
+            bot.telegram.sendMessage(user.chat_id, message, { parse_mode: "Markdown", disable_web_page_preview: true, reply_markup: keyboard.reply_markup });
         })
     }
 

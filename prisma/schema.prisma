@@ -16,7 +16,8 @@ model Users {
     id Int @id @default(autoincrement())
     chat_id String 
     board Boards[] 
-    tracking Trackings[] 
+    tracking Trackings[]
+    salt String @default("")
 }
 
 model Boards {

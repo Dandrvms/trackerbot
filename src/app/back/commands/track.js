@@ -1,6 +1,6 @@
 import { prisma } from "@/libs/prisma"
-const url = process.env.WEB_URL
-const scrapeURL = process.env.SCRAPE_URL
+const url = process.env.BOARDS_URL
+const scrapeURL = process.env.WEB_URL
 const boards = ["webo", "meta", "polls"]
 
 export default async (ctx) => {

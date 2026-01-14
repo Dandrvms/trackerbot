@@ -8,7 +8,8 @@ import mysubs from "@/app/back/commands/mysubs.js";
 import track from "@/app/back/commands/track.js";
 import untrack from "@/app/back/commands/untrack.js"
 import post, {setUpPostHandlers} from "@/app/back/commands/post.js"
-
+import myposts from "@/app/back/commands/myposts.js";
+import { handleInput } from '@/app/utils/utils';
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 
@@ -18,29 +19,6 @@ if (!token) {
 
 
 const bot = new Telegraf(token);
-setUpPostHandlers(bot)
-console.log("Bot inicializado con éxito");
-
-
-bot.start(start);
-bot.help(help);
-bot.command('sub', sub);
-bot.command('unsub', unsub);
-bot.command('mysubs', mysubs);
-bot.command('track', track);
-bot.command('untrack', untrack);
-bot.command('post', post);
-
-
-bot.action('delete_post', async (ctx) => {
-  try {
-    await ctx.editMessageText("Publicacion cancelada.")
-    await ctx.answerCbQuery("Post eliminado.")
-  } catch (error) {
-    console.log("Error al borrar: ", error)
-    ctx.answerCbQuery("No se pudo borrar el mensaje.")
-  }
-})
 // configurar el webhook
 const webhookUrl = `${process.env.URL}/api/telegram`; 
 if (!process.env.URL) {
@@ -54,5 +32,19 @@ bot.telegram.setWebhook(webhookUrl)
   .catch((error) => {
     console.error('Error configurando el webhook:', error);
   });
+setUpPostHandlers(bot)
+handleInput(bot)
+console.log("Bot inicializado con éxito");
+
+
+bot.start(start);
+bot.help(help);
+bot.command('sub', sub);
+bot.command('unsub', unsub);
+bot.command('mysubs', mysubs);
+bot.command('track', track);
+bot.command('untrack', untrack);
+bot.command('post', post);
+bot.command('myposts', myposts);
 
 export default bot;

@@ -1,6 +1,13 @@
 //postear en un tablón desde el bot
-
 import { Markup } from "telegraf";
+import { apiPost, clearUserState, userStates } from "@/app/utils/utils";
+
+
+
+export default async (ctx) => {
+    ctx.deleteMessage().catch(() => { });
+    await ctx.reply(boardMenu.text, boardMenu.keyboard);
+}
 
 
 
@@ -14,11 +21,6 @@ const boardMenu = {
     ])
 }
 
-const userStates = {}
-
-export default async function post(ctx) {
-    ctx.reply(boardMenu.text, boardMenu.keyboard);
-}
 
 export function setUpPostHandlers(bot) {
     bot.action(/post:(.*)/, async (ctx) => {
@@ -40,13 +42,13 @@ export function setUpPostHandlers(bot) {
                 menuMessageId: sentMenu.message_id
             };
 
+            await ctx.answerCbQuery();
+
         } catch (error) {
             console.log("Error: ", error)
             ctx.editMessageText("Error al seleccionar tablón, intenta de nuevo.")
         }
     })
-
-
 
 
     bot.action('back', async (ctx) => {
@@ -63,89 +65,53 @@ export function setUpPostHandlers(bot) {
             );
 
             userStates[userId] = {
-                ...state, 
+                ...state,
                 step: 'waiting_text',
                 menuMessageId: sentMenu.message_id,
-                content: undefined 
+                content: undefined
             };
 
         } else {
 
-            delete userStates[userId];
+            clearUserState(userId);
             await ctx.editMessageText(boardMenu.text, boardMenu.keyboard);
         }
         await ctx.answerCbQuery();
     })
 
     bot.action('cancel', (ctx) => {
-        delete userStates[ctx.from.id];
-        ctx.reply("Has cancelado la acción.");
+        clearUserState(ctx.from.id);
         ctx.deleteMessage();
 
     });
 
 
     bot.action('send', async (ctx) => {
-        const userId = ctx.from.id
-        const state = userStates[userId]
 
+        await apiPost(ctx)
+        
+    })  
 
-        if (!state || state.step !== 'waiting_confirmation') {
-            return ctx.answerCbQuery("Error: La sesión expiró o ya fue publicada.");
-        }
+bot.action('pin', async (ctx) => {
+    const userId = ctx.from.id
+    const state = userStates[userId]
 
-        try {
+    if (!state) {
+        await ctx.answerCbQuery("Sesión expirada.")
+        return
+    }
 
-            const { board, content } = state
-            console.log(`Mensaje: "${content}" publicado en /${board}/`)
-            await ctx.editMessageText("Post enviado con éxito.")
-            delete userStates[userId]
-        } catch (error) {
-            console.log("Error: ", error)
-        }
+    const messageId = ctx.callbackQuery.message.message_id;
 
+    await ctx.editMessageText("Elige un PIN de 6 dígitos. Este PIN se usará para generar tu llave secreta. ⚠ Importante: No guardamos este PIN, si lo olvidas no podrás editar ni borrar tus mensajes. Anótalo o recuérdalo", Markup.inlineKeyboard([
+        [Markup.button.callback('Cancelar', 'cancel')]
+    ]))
 
-    })
-
-    bot.on('text', async (ctx, next) => {
-        const userId = ctx.from.id
-        const state = userStates[userId]
-
-        if (!state || state.step != 'waiting_text') {
-            return next()
-        }
-
-        if (!ctx.message.text) {
-            return ctx.reply("Por favor, solo texto.")
-        }
-        if (ctx.message.text.startsWith('/')) {
-            delete userStates[ctx.from.id];
-            return next(); // Deja que el comando se ejecute normalmente
-        }
-
-        if (state.menuMessageId) {
-            await ctx.telegram.deleteMessage(ctx.chat.id, state.menuMessageId).catch(() => { });
-        }
-
-        const postContent = ctx.message.text
-        const board = state.board
-
-        userStates[userId] = {
-            ...state,
-            step: 'waiting_confirmation',
-            board: board,
-            content: postContent
-        };
-
-        ctx.reply(`Tu post para publicar en /${board}/: \n\n${postContent}`, Markup.inlineKeyboard([
-            [Markup.button.callback('Publicar', 'send')],
-            [Markup.button.callback('Volver', 'back'),
-            Markup.button.callback('Cancelar', 'cancel')
-            ]
-        ]))
-
-
-
-
-    })
+    userStates[userId] = {
+        ...state,
+        step: 'waiting_pin',
+        menuMessageId: message_id
+    };
+    await ctx.answerCbQuery();
+})
 }

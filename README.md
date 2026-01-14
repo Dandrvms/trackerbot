@@ -15,5 +15,5 @@ En el archivo .env del directorio raíz debe ir lo siguiente:
 
 * URL="URL DONDE ESTA ALOJADO EL BOT PARA CONFIGURAR EL WEBHOOK"
 * DATABASE_URL="URL DE LA BASE DE DATOS"
-* WEB_URL="URL DE LA WEB DE LA FORMA: https://web.com/board"
-* SCRAPE_URL="URL BASE DE LA WEB DE LA FORMA: htts://web.com"
+* BOARDS_URL="URL DE LA WEB DE LA FORMA: https://web.com/board"
+* WEB_URL="URL BASE DE LA WEB DE LA FORMA: htts://web.com"
