@@ -14,10 +14,11 @@ datasource db {
 
 model Users {
     id Int @id @default(autoincrement())
-    chat_id String 
+    chat_id String @unique
     board Boards[] 
     tracking Trackings[]
     salt String @default("")
+    trackall Boolean @default(false)
 }
 
 model Boards {
@@ -33,4 +34,10 @@ model Trackings {
     userId Int
     content String?
     user Users @relation(fields: [userId], references: [id])
+}
+
+model UserSession {
+    userId String @id
+    pin String
+    expires DateTime
 }

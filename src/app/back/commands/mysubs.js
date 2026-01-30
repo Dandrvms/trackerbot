@@ -12,23 +12,27 @@ export default async (ctx) => {
             tracking: true
         }
     })
-
+    let message = ""
     if (user) {
         const boards = user.board.map(b => b.name)
         if (boards.length > 0) {
-            ctx.reply("Estás suscrito a los siguientes tablones:\n- " + boards.join("\n- "))
+            message += "*Estás suscrito a los siguientes tablones:*\n- " + boards.join("\n- ")
         } else {
-            ctx.reply("No estás suscrito a ningún tablón.")
+            message += "*No estás suscrito a ningún tablón.*"
         }
 
         const trackingsId = user.tracking.map(t => t.postId)
         const trackingsContent = user.tracking.map(t => t.content)
         if (trackingsId.length > 0) {
-            const elements = trackingsId.map((id, index) => `${id}. ${trackingsContent[index]}`).join("\n")
+            const elements = trackingsId.map((id, index) => `_${id}. ${trackingsContent[index]}_`).join("\n\n")
 
-            ctx.reply("Estás siguiendo los siguientes posts:\n" + elements)
+            message += "\n\n*Y estás siguiendo los siguientes posts:*\n\n" + elements
         } else {
-            ctx.reply("No estás siguiendo ningún post.")
+            message += "\n\n*No estás siguiendo ningún post.*"
         }
+
+        ctx.reply(message, {parse_mode: 'Markdown'})
+    } else {
+        ctx.reply("No tienes registros.")
     }
 }

@@ -1,6 +1,7 @@
 //postear en un tablón desde el bot
 import { Markup } from "telegraf";
-import { apiPost, clearUserState, userStates } from "@/app/utils/utils";
+import { clearUserState, getConfirmationMenu, getCachedPin } from "@/app/utils/utils";
+import { userStates, cache } from "@/app/utils/consts"
 
 
 
@@ -16,11 +17,67 @@ const boardMenu = {
     keyboard: Markup.inlineKeyboard([
         [Markup.button.callback('/webo/', 'post:webo'),
         Markup.button.callback('/meta/', 'post:meta')],
+        [Markup.button.callback('/test/', 'post:test')],
 
         [Markup.button.callback('cancelar', 'cancel')]
     ])
 }
 
+
+export async function apiPost(ctx) {
+    const userId = ctx.from.id
+    const state = userStates[userId]
+    const pin = await getCachedPin(userId)
+
+    if (!pin) {
+        return ctx.answerCbQuery("Sesión expirada. Ingresa tu PIN nuevamente.")
+    }
+
+    if (!state || state.step !== 'waiting_confirmation' && state.step !== 'waiting_pin') {
+        return ctx.answerCbQuery("Error: Sesión no válida.");
+    }
+
+    try {
+
+        const { board, content, menuMessageId } = state
+
+        const response = await fetch(`${process.env.URL}/api/post`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                board: board,
+                content: content,
+                pin: pin,
+                user: userId.toString()
+            })
+        })
+        if (response.status != 200) {
+            console.log("Error en la API al postear: ", await response.text())
+            return ctx.telegram.editMessageText(ctx.chat.id, menuMessageId, null, "Error al publicar el post. Inténtalo más ahorita.", getConfirmationMenu(ctx.chat.id))
+        }
+
+        const { cont, id } = await response.json()
+        await ctx.telegram.editMessageText(ctx.chat.id, menuMessageId, null, "Post enviado con éxito.")
+        clearUserState(userId);
+
+        const notif = await fetch(`${process.env.URL}/api/notify/post`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${process.env.WEB_TOKEN}`
+            },
+            body: JSON.stringify({
+                content: cont,
+                id: id,
+                boardId: board
+            })
+        })
+    } catch (error) {
+        console.log("Error: ", error)
+    }
+}
 
 export function setUpPostHandlers(bot) {
     bot.action(/post:(.*)/, async (ctx) => {
@@ -110,7 +167,7 @@ bot.action('pin', async (ctx) => {
     userStates[userId] = {
         ...state,
         step: 'waiting_pin',
-        menuMessageId: message_id
+        menuMessageId: messageId
     };
     await ctx.answerCbQuery();
 })

@@ -9,8 +9,13 @@ import track from "@/app/back/commands/track.js";
 import untrack from "@/app/back/commands/untrack.js"
 import post, {setUpPostHandlers} from "@/app/back/commands/post.js"
 import myposts from "@/app/back/commands/myposts.js";
+import trackall from '@/app/back/commands/trackall';
+import untrackall from '@/app/back/commands/untrackall'
+import scan from '@/app/back/commands/scan'
 import { handleInput } from '@/app/utils/utils';
-
+import { handleNavigation } from '@/app/back/commands/myposts.js';
+import { handleNotifications } from '@/app/utils/notifyUtils';
+import { handleScan } from '@/app/back/commands/scan';
 const token = process.env.TELEGRAM_BOT_TOKEN;
 
 if (!token) {
@@ -34,6 +39,9 @@ bot.telegram.setWebhook(webhookUrl)
   });
 setUpPostHandlers(bot)
 handleInput(bot)
+handleNavigation(bot)
+handleNotifications(bot)
+handleScan(bot)
 console.log("Bot inicializado con éxito");
 
 
@@ -46,5 +54,8 @@ bot.command('track', track);
 bot.command('untrack', untrack);
 bot.command('post', post);
 bot.command('myposts', myposts);
+bot.command('trackall', trackall)
+bot.command('untrackall', untrackall)
+bot.command('scan', scan)
 
 export default bot;

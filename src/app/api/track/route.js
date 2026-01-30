@@ -1,32 +1,81 @@
-//notificar de un post en un tablón
-
+import { NextResponse } from "next/server"
 import { prisma } from "@/libs/prisma"
-import { NextResponse } from "next/server";
-import bot from "@/app/back/bot";
-export async function POST(req, res) {
-    const request = await req.json();
-    const { id, content, postId, boardId } = request;
+export async function POST(req) {
+    const scrapeURL = process.env.WEB_URL
+    const request = await req.json()
+    const { chatId, postId } = request
 
-    if (!id || !content || !postId || !boardId) {
+    if (!chatId || !postId) {
         console.log(request)
         return NextResponse.json({ error: "Faltan parámetros obligatorios." }, { status: 400 });
     }
 
-    const users = await prisma.users.findMany({
+    const user = await prisma.users.findFirst({
         where: {
-            tracking: {
-                some: {
-                    postId: postId
-                }
-            }
+            chat_id: chatId
+        },
+        include: {
+            tracking: true
         }
     })
-    const message = `Nuevo respuesta en el post ${postId}:\n\nwbn N. ${id}\n\n${content}\n\n[Responder ↗](${process.env.BOARDS_URL}${boardId}/${postId}/comments)`
-    if(users){
-        users.forEach(user => {
-            bot.telegram.sendMessage(user.chat_id, message, { parse_mode: "Markdown", disable_web_page_preview: true });
+
+    if (user) {
+        if (user.tracking.map(t => t.postId).includes(postId)) {
+            return NextResponse.json({ message: `Ya estabas siguiendo el post ${postId}` })
+        } else {
+            try {
+                const get = await fetch(`${scrapeURL}/api/bot/scrape/posts/${postId}`, {
+                    method: "GET",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${process.env.WEB_TOKEN}`
+                    }
+                })
+                if (get.status == 404) {
+                    return NextResponse.json({ error: "No se pudo encontrar el post." })
+
+                }
+                if (get.status != 200) {
+                    return NextResponse.json({ error: "Ocurrió un error. Intenta de nuevo." })
+                }
+
+                const { content } = await get.json()
+                const res = await prisma.trackings.create({
+                    data: {
+                        userId: user.id,
+                        postId: Number(postId),
+                        content: content.slice(0, 100)
+                    }
+                })
+                if (res) {
+                    return NextResponse.json({ message: `Ahora estás siguiendo el post ${postId}` })
+                } else {
+                    return NextResponse.json({ message: "No se pudo seguir el post." })
+                }
+            } catch(e){
+                console.log(e)
+            }
+        }
+    } else {
+        const res = await prisma.users.create({
+            data: {
+                chat_id: chatId
+            },
+            tracking: {
+                create: {
+                    postId: postId,
+                    content
+                }
+            }
+
         })
+
+        if (res) {
+            return NextResponse.json({ message: `Ahora estás siguiendo el post ${postId}` })
+        } else {
+            return NextResponse.json({ message: "No se pudo seguir el post." })
+        }
     }
 
-    return NextResponse.json({ success: true });
+
 }

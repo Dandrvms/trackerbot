@@ -1,5 +1,58 @@
 import crypto from 'crypto';
+import { getPosts } from "@/app/back/commands/myposts"
 import { Markup } from 'telegraf';
+import { userStates, cache } from '@/app/utils/consts';
+import { apiPost } from '@/app/back/commands/post'
+import { apiEdit, apiDelete } from '@/app/back/commands/myposts'
+import { apiComment } from '@/app/utils/notifyUtils'
+import { prisma } from '@/libs/prisma'
+
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY; 
+const IV_LENGTH = 16;
+
+export function encrypt(text) {
+    const iv = crypto.randomBytes(IV_LENGTH);
+    const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY, 'hex'), iv);
+    let encrypted = cipher.update(text);
+    encrypted = Buffer.concat([encrypted, cipher.final()]);
+    return iv.toString('hex') + ':' + encrypted.toString('hex');
+}
+
+export function decrypt(text) {
+    const textParts = text.split(':');
+    const iv = Buffer.from(textParts.shift(), 'hex');
+    const encryptedText = Buffer.from(textParts.join(':'), 'hex');
+    const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY, 'hex'), iv);
+    let decrypted = decipher.update(encryptedText);
+    decrypted = Buffer.concat([decrypted, decipher.final()]);
+    return decrypted.toString();
+}
+
+
+export async function cacheUserPin(chatId, pin) {
+    const encryptedPin = encrypt(pin); 
+    const expiry = new Date(Date.now() + 15 * 60 * 1000); // 15 minutos
+
+    await prisma.userSession.upsert({
+        where: { userId: chatId.toString() },
+        update: { pin: encryptedPin, expires: expiry },
+        create: { userId: chatId.toString(), pin: encryptedPin, expires: expiry },
+    });
+}
+
+export async function getCachedPin(chatId) {
+    const session = await prisma.userSession.findUnique({
+        where: { userId: chatId.toString() }
+    });
+
+    if (!session || new Date() > session.expires) {
+        if (session) await prisma.userSession.delete({ where: { userId: chatId.toString() } });
+        return null;
+    }
+
+    return decrypt(session.pin);
+}
+
 
 export function generateSalt() {
     return crypto.randomBytes(16).toString('hex');
@@ -12,30 +65,30 @@ export function deriveSecretKey(pin, salt) {
     return crypto.pbkdf2Sync(pin, salt, iterations, keylength, digest).toString('hex');
 }
 
-export const userStates = {}
+
 
 export function clearUserState(userId) {
     delete userStates[userId];
 }
 
 
-export const cache = new Map();
 
-export function cacheUserPin(chatId, pin) {
-    cache.set(chatId, pin);
 
-    setTimeout(() => {
-        cache.delete(chatId);
-        console.log(`Pin eliminado para chat ${chatId}`);
-    }, 15 * 60 * 1000);
-}
+// export function cacheUserPin(chatId, pin) {
+//     cache.set(chatId, pin);
+
+//     setTimeout(() => {
+//         cache.delete(chatId);
+//         console.log(`Pin eliminado para chat ${chatId}`);
+//     }, 15 * 60 * 1000);
+// }
 
 
 export async function safeEditMessageText(ctx, messageId, text, keyboard = null, chatId = null) {
     try {
         const targetChatId = chatId || ctx.chat?.id || ctx.from?.id;
         if (!messageId) {
-            throw new Error("No messageId proporcionado para safeEditMessageText");
+           console.log("No messageId proporcionado para safeEditMessageText");
 
         }
 
@@ -71,12 +124,39 @@ export async function safeEditMessageText(ctx, messageId, text, keyboard = null,
 
 export function handleInput(bot) {
 
-   
+
     bot.action(/^(prev_page_|next_page_)(\d+)$/, async (ctx) => {
         const page = parseInt(ctx.match[2]);
         await getPosts(ctx, page);
         await ctx.answerCbQuery();
     });
+
+    bot.action(/^pin_(.*)/, async (ctx) => {
+        const action = ctx.match[1]
+        console.log("Acción: ", action)
+        const userId = ctx.from.id
+        const state = userStates[userId]
+
+        if (!state) {
+            await ctx.answerCbQuery("Sesión expirada.")
+            return
+        }
+
+        const messageId = ctx.callbackQuery.message.message_id;
+
+        await ctx.editMessageText("Envía el pin que asociaste a este post", Markup.inlineKeyboard([
+            [Markup.button.callback('Cancelar', 'cancel')]
+        ]))
+
+        let step = action === 'edit' ? 'waiting_pin_edit' : action === 'delete' ? 'waiting_pin_delete' : ''
+        console.log("Step: ", step)
+        userStates[userId] = {
+            ...state,
+            step: step,
+            menuMessageId: messageId
+        };
+        await ctx.answerCbQuery();
+    })
 
 
     bot.on('text', async (ctx, next) => {
@@ -89,20 +169,25 @@ export function handleInput(bot) {
         }
         console.log("State step: ", state.step)
         switch (state.step) {
-            case 'waiting_text':
+            case 'waiting_text': case 'editing_text': case 'waiting_text_comment':
                 await handleTextInput(ctx, state);
                 break;
-            case 'waiting_pin':
+            case 'waiting_pin': case 'waiting_pin_comment':
                 await handlePinInput(ctx, state);
                 break;
             case 'myposts_waiting_pin':
                 await handlePinInput(ctx, state);
                 break;
+            case 'waiting_pin_edit': case 'waiting_pin_delete':
+                await handlePinInput(ctx, state)
+                break
             default:
                 return next();
         }
 
     });
+
+
 }
 
 
@@ -110,15 +195,21 @@ async function handleTextInput(ctx, state) {
     const userId = ctx.from.id
     const postContent = ctx.message.text
     const board = state.board
-
+    const postId = state.postId
     await ctx.deleteMessage().catch(() => { })
     if (state.menuMessageId) {
         await ctx.telegram.deleteMessage(ctx.chat.id, state.menuMessageId).catch(() => { });
     }
 
+    let sentMsg
 
-    const sentMsg = await ctx.reply(`Tu post para publicar en /${board}/: \n\n${postContent}`, getConfirmationMenu(userId))
-
+    if (state.step === 'waiting_text') {
+        sentMsg = await ctx.reply(`Tu post para publicar en /${board}/: \n\n${postContent}`, await getConfirmationMenu(userId))
+    } else if (state.step === 'editing_text') {
+        sentMsg = await ctx.reply(`Nueva versión del post: \n\n${postContent}`, await getConfirmationEditMenu(userId))
+    } else if (state.step === 'waiting_text_comment') {
+        sentMsg = await ctx.reply(`Tu comentario para responder al post ${postId}:\n\n${postContent}`, await getConfirmationCommentMenu(userId))
+    }
     userStates[userId] = {
         ...state,
         step: 'waiting_confirmation',
@@ -130,6 +221,8 @@ async function handleTextInput(ctx, state) {
 async function handlePinInput(ctx, state) {
     const userId = ctx.from.id
     const pin = ctx.message.text
+
+    console.log(`[DEBUG] handlePinInput - userId: ${userId}, step: ${state.step}, pin: ${pin}`);
 
     await ctx.deleteMessage().catch(() => { })
     if (!/^\d{6}$/.test(pin)) {
@@ -154,7 +247,7 @@ async function handlePinInput(ctx, state) {
             "Verificando PIN y publicando..."
         );
 
-        cacheUserPin(userId.toString(), pin);
+        await cacheUserPin(userId.toString(), pin);
         await apiPost(ctx)
     } else if (state.step === 'myposts_waiting_pin') {
 
@@ -163,132 +256,44 @@ async function handlePinInput(ctx, state) {
             state.menuMessageId,
             "Verificando PIN y obteniendo tus posts..."
         );
-        cacheUserPin(userId.toString(), pin);
+        await cacheUserPin(userId.toString(), pin);
         await getPosts(ctx)
+    } else if (state.step === 'waiting_pin_edit') {
+        await safeEditMessageText(
+            ctx,
+            state.menuMessageId,
+            "Verificando PIN y editando..."
+        )
+        await cacheUserPin(userId.toString(), pin)
+        await apiEdit(ctx)
+    } else if (state.step === 'waiting_pin_delete') {
+        await safeEditMessageText(
+            ctx,
+            state.menuMessageId,
+            "Verificando PIN y borrando..."
+        )
+        await cacheUserPin(userId.toString(), pin)
+        await apiDelete(ctx)
+    } else if (state.step === 'waiting_pin_comment') {
+        await safeEditMessageText(
+            ctx,
+            state.menuMessageId,
+            "Verificando PIN y respondiendo..."
+        )
+        await cacheUserPin(userId.toString(), pin)
+        await apiComment(ctx)
     }
 }
 
-
-const POSTS_PER_PAGE = 5;
-
-async function getPosts(ctx, page = 0) {
-    const userId = ctx.from.id;
-    let state = userStates[userId];
+// export function isCached(ctx) {
+//     const userId = ctx.from.id
+//     return cache.has(userId.toString())
+// }
 
 
-    if (!state.myPosts) {
-        const pin = cache.get(userId.toString());
-        if (!pin) return ctx.answerCbQuery("Sesión expirada. Ingresa tu PIN.");
 
-        const response = await fetch(`${process.env.URL}/api/get/myposts`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user: userId.toString(), pin: pin })
-        });
-
-        if (response.status != 200) {
-            return ctx.telegram.editMessageText(ctx.chat.id, state.menuMessageId, null, "Error al obtener posts.");
-        }
-
-        state.myPosts = await response.json();
-    }
-
-    const messages = state.myPosts;
-    const totalPages = Math.ceil(messages.length / POSTS_PER_PAGE);
-
-    if (messages.length === 0) {
-        return safeEditMessageText(ctx, state.menuMessageId, "No tienes posts publicados.");
-    }
-
-
-    const start = page * POSTS_PER_PAGE;
-    const end = start + POSTS_PER_PAGE;
-    const paginatedItems = messages.slice(start, end);
-
-    let replyText = `<b>Tus posts publicados (${page + 1}/${totalPages}):</b>\n\n`;
-
-    paginatedItems.forEach((msg, index) => {
-        const globalIndex = start + index + 1;
-
-        const cleanContent = msg.content.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        const url = `${process.env.BOARDS_URL}${msg.boardId}#${msg.id}`;
-
-        replyText += `${globalIndex}. <a href="${url}">Ver Post #${msg.id}</a>\n`;
-        replyText += `<i>${cleanContent.substring(0, 100)}${cleanContent.length > 100 ? '...' : ''}</i>\n\n`;
-    });
-
-    const buttons = [];
-    const navRow = [];
-
-    if (page > 0) navRow.push(Markup.button.callback('⬅ Anterior', `prev_page_${page - 1}`));
-    if (page < totalPages - 1) navRow.push(Markup.button.callback('Siguiente ➡', `next_page_${page + 1}`));
-
-    if (navRow.length > 0) buttons.push(navRow);
-    buttons.push([Markup.button.callback('Cerrar', 'cancel')]);
-
-    await safeEditMessageText(ctx, state.menuMessageId, replyText, Markup.inlineKeyboard(buttons));
-
-
-    userStates[userId] = { ...state, currentPage: page };
-}
-
-export async function apiPost(ctx) {
-    const userId = ctx.from.id
-    const state = userStates[userId]
-    const pin = cache.get(userId.toString());
-
-    if (!pin) {
-        return ctx.answerCbQuery("Sesión expirada. Ingresa tu PIN nuevamente.")
-    }
-
-    if (!state || state.step !== 'waiting_confirmation' && state.step !== 'waiting_pin') {
-        return ctx.answerCbQuery("Error: Sesión no válida.");
-    }
-
-    try {
-
-        const { board, content, menuMessageId } = state
-
-        const response = await fetch(`${process.env.URL}/api/post`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                board: board,
-                content: content,
-                pin: pin,
-                user: userId.toString()
-            })
-        })
-        if (response.status != 200) {
-            console.log("Error en la API al postear: ", await response.text())
-            return ctx.telegram.editMessageText(ctx.chat.id, menuMessageId, null, "Error al publicar el post. Inténtalo más ahorita.", getConfirmationMenu(ctx.chat.id))
-        }
-
-        const { cont, id } = await response.json()
-        await ctx.telegram.editMessageText(ctx.chat.id, menuMessageId, null, "Post enviado con éxito.")
-        clearUserState(userId);
-
-        const notif = await fetch(`${process.env.URL}/api/notify`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${process.env.WEB_TOKEN}`
-            },
-            body: JSON.stringify({
-                content: cont,
-                id: id,
-                boardId: board
-            })
-        })
-    } catch (error) {
-        console.log("Error: ", error)
-    }
-}
-
-const getConfirmationMenu = (userId) => {
-    const hasPin = cache.has(userId.toString());
+export const getConfirmationMenu = async (userId) => {
+    const hasPin = await getCachedPin(userId)
     return Markup.inlineKeyboard([
         [
             hasPin
@@ -297,6 +302,35 @@ const getConfirmationMenu = (userId) => {
         ],
         [
             Markup.button.callback('Volver', 'back'),
+            Markup.button.callback('Cancelar', 'cancel')
+        ]
+    ]);
+};
+
+export const getConfirmationCommentMenu = async (userId) => {
+    const hasPin = await getCachedPin(userId)
+    return Markup.inlineKeyboard([
+        [
+            hasPin
+                ? Markup.button.callback('Enviar ahora', 'reply')
+                : Markup.button.callback('🔑 Ingresar PIN y Enviar', 'comment_pin')
+        ],
+        [
+            Markup.button.callback('Cancelar', 'cancel')
+        ]
+    ]);
+};
+
+
+const getConfirmationEditMenu = async (userId) => {
+    const hasPin = await getCachedPin(userId)
+    return Markup.inlineKeyboard([
+        [
+            hasPin
+                ? Markup.button.callback('Guardar cambios', 'save')
+                : Markup.button.callback('🔑 Ingresar PIN y Guardar Cambios', 'pin_edit')
+        ],
+        [
             Markup.button.callback('Cancelar', 'cancel')
         ]
     ]);

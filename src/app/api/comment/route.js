@@ -26,9 +26,9 @@ export async function POST(req, res) {
     
 
     const request = await req.json();
-    const { content, board, pin, user } = request;
+    const { postId, content, pin, user} = request;
     
-    if (!content || !board || !user || !pin) {
+    if (!postId || !content || !pin || !user) {
         console.log(request)
         return NextResponse.json({ error: "Faltan parámetros obligatorios." }, { status: 400 });
     }
@@ -38,9 +38,9 @@ export async function POST(req, res) {
     const derivedKey = deriveSecretKey(pin, salt);
 
     console.log(`Usuario ${user} con PIN ${pin}`);
-    console.log(`Enviando post al tablón ${board}: ${content}`);    
+    console.log(`Enviando respuesta al post ${postId}: ${content}`);    
 
-    const response = await fetch(`${process.env.WEB_URL}/api/bot/post`,{
+    const response = await fetch(`${process.env.WEB_URL}/api/bot/comment`,{
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -49,7 +49,7 @@ export async function POST(req, res) {
         },
         body: JSON.stringify({
             content: content,
-            board: board,
+            postId: postId,
             derivedKey: derivedKey,
         })
     })
