@@ -1,9 +1,9 @@
 import crypto from 'crypto';
-import { getPosts } from "@/app/back/commands/myposts"
+import { getPosts } from "@/app/commands/myposts"
 import { Markup } from 'telegraf';
 import { userStates, cache } from '@/app/utils/consts';
-import { apiPost } from '@/app/back/commands/post'
-import { apiEdit, apiDelete } from '@/app/back/commands/myposts'
+import { sendPost } from '@/app/commands/post'
+import { apiEdit, apiDelete } from '@/app/commands/myposts'
 import { apiComment } from '@/app/utils/notifyUtils'
 import { prisma } from '@/libs/prisma'
 
@@ -248,7 +248,7 @@ async function handlePinInput(ctx, state) {
         );
 
         await cacheUserPin(userId.toString(), pin);
-        await apiPost(ctx)
+        await sendPost(ctx)
     } else if (state.step === 'myposts_waiting_pin') {
 
         await safeEditMessageText(

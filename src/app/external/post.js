@@ -1,9 +1,7 @@
 //enviar post a un tablón
 
 import { prisma } from "@/libs/prisma"
-import {bot} from "@/app/back/bot"
 import { generateSalt, deriveSecretKey } from "@/app/utils/utils";
-import { NextResponse } from "next/server";
 
 async function getSalt(user){
     const salt = await prisma.users.findFirst({
@@ -22,16 +20,7 @@ async function getSalt(user){
     return salt.salt;
 }
 
-export async function POST(req, res) {
-    
-
-    const request = await req.json();
-    const { content, board, pin, user } = request;
-    
-    if (!content || !board || !user || !pin) {
-        console.log(request)
-        return NextResponse.json({ error: "Faltan parámetros obligatorios." }, { status: 400 });
-    }
+export async function post(content, board, pin, user) {
 
     
     const salt = await getSalt(user);
@@ -58,10 +47,10 @@ export async function POST(req, res) {
 
     if (response.status != 200) {
         console.log("Error al enviar el post: ", await response.text())
-        return NextResponse.json({ error: "Error al enviar el post." }, { status: 500 });
+        return { error: "Error al enviar el post." }
     }
 
 
 
-    return NextResponse.json({ cont: data.content, id: data.id });
+    return { cont: data.content, id: data.id };
 }

@@ -1,6 +1,8 @@
 import { userStates, cache } from "@/app/utils/consts"
 import { Markup } from "telegraf"
 import { getConfirmationCommentMenu, clearUserState, getCachedPin } from "@/app/utils/utils"
+import { track } from "@/app/external/track"
+import { comment } from "@/app/external/comment"
 
 const safeAnswer = async (ctx) => {
     try { await ctx.answerCbQuery() } catch (e) { console.log("Query expirada") }
@@ -59,7 +61,7 @@ export async function handleNotifications(bot) {
     })
 
     bot.action('reply', async (ctx) => {
-        await apiComment(ctx)
+        await sendComment(ctx)
     })
 
 }
@@ -68,19 +70,10 @@ export async function handleNotifications(bot) {
 async function TrackPost(ctx, postId) {
     const userId = ctx.chat.id
 
-    const response = await fetch(`${process.env.URL}/api/track`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'applicaction/json'
-        },
-        body: JSON.stringify({
-            chatId: userId.toString(),
-            postId: Number(postId)
-        })
+    const { error, message } = await track(userId.toString(), Number(postId))
 
-    })
+    
 
-    const { message, error } = await response.json()
     if (message) {
         ctx.reply(message)
     }
@@ -100,7 +93,9 @@ const boardMenu = {
 async function ReplyPost(ctx, postId, boardId) {
     const userId = ctx.from.id
     const sentMsg = await ctx.reply(boardMenu.text, boardMenu.keyboard);
+    const state = userStates[userId]
     userStates[userId] = {
+        ...state,
         step: 'waiting_text_comment',
         menuMessageId: sentMsg.message_id,
         postId: postId,
@@ -109,7 +104,7 @@ async function ReplyPost(ctx, postId, boardId) {
 }
 
 
-export async function apiComment(ctx) {
+export async function sendComment(ctx) {
     const userId = ctx.from.id
     const state = userStates[userId]
     const pin = await getCachedPin(userId)
@@ -127,24 +122,14 @@ export async function apiComment(ctx) {
 
         const { content, menuMessageId, postId, boardId } = state
 
-        const response = await fetch(`${process.env.URL}/api/comment`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                postId: postId,
-                content: content,
-                pin: pin,
-                user: userId.toString()
-            })
-        })
-        if (response.status != 200) {
-            console.log("Error en la API al comentar: ", await response.text())
+        const { error, cont, id } = await comment(postId, content, pin, userId.toString())
+
+       
+        if (error) {
+            console.log("Error en la API al comentar: ", error)
             return ctx.telegram.editMessageText(ctx.chat.id, menuMessageId, null, "Error al responder al post. Inténtalo más ahorita.", getConfirmationCommentMenu(ctx.chat.id))
         }
 
-        const { cont, id } = await response.json()
         await ctx.telegram.editMessageText(ctx.chat.id, menuMessageId, null, "Comentario enviado con éxito.")
         clearUserState(userId);
 

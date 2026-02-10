@@ -1,14 +1,13 @@
-import { NextResponse } from "next/server"
-import { prisma } from "@/libs/prisma"
-export async function POST(req) {
-    const scrapeURL = process.env.WEB_URL
-    const request = await req.json()
-    const { chatId, postId } = request
 
-    if (!chatId || !postId) {
-        console.log(request)
-        return NextResponse.json({ error: "Faltan parámetros obligatorios." }, { status: 400 });
-    }
+import { prisma } from "@/libs/prisma"
+export async function track(chatId, postId) {
+    const scrapeURL = process.env.WEB_URL
+
+
+    // if (!chatId || !postId) {
+    //     console.log(request)
+    //     return NextResponse.json({ error: "Faltan parámetros obligatorios." }, { status: 400 });
+    // }
 
     const user = await prisma.users.findFirst({
         where: {
@@ -21,10 +20,10 @@ export async function POST(req) {
 
     if (user) {
         if (user.tracking.map(t => t.postId).includes(postId)) {
-            return NextResponse.json({ message: `Ya estabas siguiendo el post ${postId}` })
+            return { message: `Ya estabas siguiendo el post ${postId}` }
         } else {
             try {
-                const get = await fetch(`${scrapeURL}/api/bot/scrape/posts/${postId}`, {
+                const get = await fetch(`${scrapeURL}/api/bot/scrape/post/${postId}`, {
                     method: "GET",
                     headers: {
                         "Content-Type": "application/json",
@@ -32,11 +31,11 @@ export async function POST(req) {
                     }
                 })
                 if (get.status == 404) {
-                    return NextResponse.json({ error: "No se pudo encontrar el post." })
+                    return { error: "No se pudo encontrar el post." }
 
                 }
                 if (get.status != 200) {
-                    return NextResponse.json({ error: "Ocurrió un error. Intenta de nuevo." })
+                    return { error: "Ocurrió un error. Intenta de nuevo." }
                 }
 
                 const { content } = await get.json()
@@ -48,9 +47,9 @@ export async function POST(req) {
                     }
                 })
                 if (res) {
-                    return NextResponse.json({ message: `Ahora estás siguiendo el post ${postId}` })
+                    return { message: `Ahora estás siguiendo el post ${postId}` }
                 } else {
-                    return NextResponse.json({ message: "No se pudo seguir el post." })
+                    return { message: "No se pudo seguir el post." }
                 }
             } catch(e){
                 console.log(e)
@@ -71,9 +70,9 @@ export async function POST(req) {
         })
 
         if (res) {
-            return NextResponse.json({ message: `Ahora estás siguiendo el post ${postId}` })
+            return { message: `Ahora estás siguiendo el post ${postId}` }
         } else {
-            return NextResponse.json({ message: "No se pudo seguir el post." })
+            return { message: "No se pudo seguir el post." }
         }
     }
 

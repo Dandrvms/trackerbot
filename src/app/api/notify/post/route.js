@@ -2,7 +2,7 @@
 
 import { prisma } from "@/libs/prisma"
 import { NextResponse } from "next/server";
-import bot from "@/app/back/bot";
+import bot from "@/app/bot";
 import { Markup } from "telegraf";
 
 export async function POST(req, res) {

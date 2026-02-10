@@ -2,6 +2,7 @@
 import { Markup } from "telegraf";
 import { clearUserState, getConfirmationMenu, getCachedPin } from "@/app/utils/utils";
 import { userStates, cache } from "@/app/utils/consts"
+import { post } from "@/app/external/post";
 
 
 
@@ -24,7 +25,7 @@ const boardMenu = {
 }
 
 
-export async function apiPost(ctx) {
+export async function sendPost(ctx) {
     const userId = ctx.from.id
     const state = userStates[userId]
     const pin = await getCachedPin(userId)
@@ -41,24 +42,13 @@ export async function apiPost(ctx) {
 
         const { board, content, menuMessageId } = state
 
-        const response = await fetch(`${process.env.URL}/api/post`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                board: board,
-                content: content,
-                pin: pin,
-                user: userId.toString()
-            })
-        })
-        if (response.status != 200) {
+        const { error, id, cont} = await post(content, board, pin, userId.toString()) 
+
+        if (error) {
             console.log("Error en la API al postear: ", await response.text())
             return ctx.telegram.editMessageText(ctx.chat.id, menuMessageId, null, "Error al publicar el post. Inténtalo más ahorita.", getConfirmationMenu(ctx.chat.id))
         }
 
-        const { cont, id } = await response.json()
         await ctx.telegram.editMessageText(ctx.chat.id, menuMessageId, null, "Post enviado con éxito.")
         clearUserState(userId);
 
@@ -92,8 +82,9 @@ export function setUpPostHandlers(bot) {
 
                 ]
             ]))
-
+            const state = userStates[userId]
             userStates[userId] = {
+                ...state,
                 step: 'waiting_text',
                 board: board,
                 menuMessageId: sentMenu.message_id
@@ -145,7 +136,7 @@ export function setUpPostHandlers(bot) {
 
     bot.action('send', async (ctx) => {
 
-        await apiPost(ctx)
+        await sendPost(ctx)
         
     })  
 

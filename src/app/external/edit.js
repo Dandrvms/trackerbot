@@ -1,16 +1,11 @@
-import { NextResponse } from "next/server";
 
-export async function POST(req, res) {
+
+export async function edit(content, postId) {
     try {
-        const request = await req.json();
-        const { content, postId } = request;
+
         
         console.log("Recibiendo solicitud de edición:", { content, postId });
         
-        if (!content || !postId) {
-            console.log("Faltan parámetros:", request);
-            return NextResponse.json({ error: "Faltan parámetros obligatorios." }, { status: 400 });
-        }
 
         console.log(`Enviando modificaciones para post ${postId}: ${content.substring(0, 50)}...`);    
 
@@ -32,13 +27,13 @@ export async function POST(req, res) {
 
         if (response.status !== 200) {
             console.log("Error al enviar el post:", responseText);
-            return NextResponse.json({ error: "Error al editar el post." }, { status: response.status });
+            return { error: "Error al editar el post." }
         }
 
-        return NextResponse.json({ success: true, status: response.status });
+        return { success: true }
 
     } catch (error) {
         console.error("Error en /api/edit:", error);
-        return NextResponse.json({ error: "Error interno del servidor." }, { status: 500 });
+        return { error: "Error interno del servidor." }
     }
 }

@@ -1,3 +1,5 @@
+import { track } from "@/app/external/track"
+
 export default async (ctx) => {
     const chatId = String(ctx.chat.id)
     const text = ctx.message.text.split(" ")
@@ -16,19 +18,9 @@ export default async (ctx) => {
         }
     }
 
-    const response = await fetch(`${process.env.URL}/api/track`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            chatId: chatId,
-            postId: postId
-        })
-    })
-    let data = await response.json()
-    const { error, message } = data
-    if (response.status != 200) {
+    const { message, error } = await track(chatId, postId)
+   
+    if (error) {
         console.log("Error en la API al hacer tracking: ", await response.text())
         
         return ctx.reply(error)

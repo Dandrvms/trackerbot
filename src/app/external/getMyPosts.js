@@ -19,14 +19,7 @@ async function getSalt(user){
 }
 
 
-export async function POST(req, res) {
-    const request = await req.json();
-    const {user, pin} = request;
-
-    if (!user || !pin) {
-        console.log(request)
-        return NextResponse.json({ error: "Faltan parámetros obligatorios." }, { status: 400 });
-    }
+export async function getMyPosts(user, pin) {
 
     const salt = await getSalt(user);
     const derivedKey = deriveSecretKey(pin, salt);
@@ -44,7 +37,7 @@ export async function POST(req, res) {
 
     if (response.status != 200) {
         console.log("Error al obtener los posts: ", await response.text())
-        return NextResponse.json({ error: "Error al obtener los posts." }, { status: 500 });
+        return { error: "Error al obtener los posts." }
     }
     const messages = await response.json()
     

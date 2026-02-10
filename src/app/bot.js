@@ -1,21 +1,21 @@
 import { Telegraf } from 'telegraf';
 import { Markup } from "telegraf";
-import start from "@/app/back/commands/start.js";
-import help from "@/app/back/commands/help.js";
-import sub from "@/app/back/commands/sub.js";
-import unsub from "@/app/back/commands/unsub.js";
-import mysubs from "@/app/back/commands/mysubs.js";
-import track from "@/app/back/commands/track.js";
-import untrack from "@/app/back/commands/untrack.js"
-import post, {setUpPostHandlers} from "@/app/back/commands/post.js"
-import myposts from "@/app/back/commands/myposts.js";
-import trackall from '@/app/back/commands/trackall';
-import untrackall from '@/app/back/commands/untrackall'
-import scan from '@/app/back/commands/scan'
+import start from "@/app/commands/start.js";
+import help from "@/app/commands/help.js";
+import sub from "@/app/commands/sub.js";
+import unsub from "@/app/commands/unsub.js";
+import mysubs from "@/app/commands/mysubs.js";
+import track from "@/app/commands/track.js";
+import untrack from "@/app/commands/untrack.js"
+import post, {setUpPostHandlers} from "@/app/commands/post.js"
+import myposts from "@/app/commands/myposts.js";
+import trackall from '@/app/commands/trackall';
+import untrackall from '@/app/commands/untrackall'
+import scan from '@/app/commands/scan'
 import { handleInput } from '@/app/utils/utils';
-import { handleNavigation } from '@/app/back/commands/myposts.js';
+import { handleNavigation } from '@/app/commands/myposts.js';
 import { handleNotifications } from '@/app/utils/notifyUtils';
-import { handleScan } from '@/app/back/commands/scan';
+import { handleScan } from '@/app/commands/scan';
 const token = process.env.TELEGRAM_BOT_TOKEN;
 
 if (!token) {

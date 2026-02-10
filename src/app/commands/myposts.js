@@ -1,13 +1,19 @@
 import { safeEditMessageText, clearUserState, getCachedPin } from "@/app/utils/utils";
 import { Markup } from 'telegraf';
 import { userStates, cache } from '@/app/utils/consts';
+import { getMyPosts } from "@/app/external/getMyPosts";
+import { edit } from "@/app/external/edit"
+import { deletePost } from "@/app/external/delete";
 export default async (ctx) => {
+
     const userId = ctx.from.id;
+    const state = userStates[userId]
     ctx.deleteMessage().catch(() => { });
     const isCached = await getCachedPin(userId)
     if (!!isCached) {
         const sentMsg = await ctx.reply("Obteniendo posts...");
         userStates[userId] = {
+            ...state,
             step: 'getting_posts',
             menuMessageId: sentMsg.message_id
         };
@@ -15,6 +21,7 @@ export default async (ctx) => {
     } else {
         const sentMsg = await ctx.reply("Escribe el PIN que enviaste cuando publicaste tus posts.", keyboard);
         userStates[userId] = {
+            ...state,
             step: 'myposts_waiting_pin',
             menuMessageId: sentMsg.message_id
         };
@@ -81,7 +88,7 @@ export function handleNavigation(bot) {
             step: 'waiting_pin_edit'
         };
 
-        await apiEdit(ctx);
+        await editMyPost(ctx);
     })
 
 
@@ -98,7 +105,7 @@ export function handleNavigation(bot) {
             step: 'waiting_pin_delete'
         };
 
-        await apiDelete(ctx);
+        await deleteMyPost(ctx);
     })
 }
 
@@ -143,7 +150,7 @@ async function DeletePost(ctx, postId) {
             [
                 hasPin
                     ? Markup.button.callback('Eliminar', 'delete')
-                    : Markup.button.callback('PIN 🔑 y eliminar', 'pin_delete') 
+                    : Markup.button.callback('PIN 🔑 y eliminar', 'pin_delete')
             ],
             [
                 Markup.button.callback('Cancelar', 'cancel')
@@ -185,17 +192,14 @@ export async function getPosts(ctx, page = 0) {
                 };
                 return response
             }
-        const response = await fetch(`${process.env.URL}/api/get/myposts`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user: userId.toString(), pin: pin })
-        });
+        const { messages, error} = await getMyPosts(userId.toString(), pin)
+        
 
-        if (response.status != 200) {
+        if (error) {
             return ctx.telegram.editMessageText(ctx.chat.id, state.menuMessageId, null, "Error al obtener posts.");
         }
 
-        state.myPosts = await response.json();
+        state.myPosts = messages
         console.log("aqui", state.myPosts)
     }
 
@@ -268,7 +272,7 @@ export async function viewPostDetail(ctx, postId) {
     await safeEditMessageText(ctx, state.menuMessageId, detailText, buttons);
 }
 
-export async function apiEdit(ctx) {
+export async function editMyPost(ctx) {
     console.log("api edit")
     const userId = ctx.from.id
     const state = userStates[userId]
@@ -291,17 +295,9 @@ export async function apiEdit(ctx) {
 
         const { content, menuMessageId } = state
 
-        const response = await fetch(`${process.env.URL}/api/edit`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                content: content,
-                postId: postId
-            })
-        })
-        if (response.status === 200) {
+        const { error, success } = await edit(content, postId)
+
+        if (success) {
             console.log("Post editado exitosamente");
             await ctx.telegram.editMessageText(
                 ctx.chat.id,
@@ -311,7 +307,7 @@ export async function apiEdit(ctx) {
             );
             clearUserState(userId)
         } else {
-            console.log("Error en la API al guardar: ", await response.text());
+            console.log("Error en la API al guardar: ", error);
             await ctx.telegram.editMessageText(
                 ctx.chat.id,
                 menuMessageId,
@@ -330,7 +326,7 @@ export async function apiEdit(ctx) {
     }
 }
 
-export async function apiDelete(ctx) {
+export async function deleteMyPost(ctx) {
     console.log("api delete")
     const userId = ctx.from.id
     const state = userStates[userId]
@@ -349,16 +345,10 @@ export async function apiDelete(ctx) {
 
         const { menuMessageId } = state
 
-        const response = await fetch(`${process.env.URL}/api/delete`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                postId: postId
-            })
-        })
-        if (response.status === 200) {
+        const { error, success } = await deletePost(postId)
+
+       
+        if (success) {
             console.log("Post eliminado exitosamente");
             await ctx.telegram.editMessageText(
                 ctx.chat.id,
@@ -368,7 +358,7 @@ export async function apiDelete(ctx) {
             );
             clearUserState(userId)
         } else {
-            console.log("Error en la API al borrar: ", await response.text());
+            console.log("Error en la API al borrar: ", error);
             await ctx.telegram.editMessageText(
                 ctx.chat.id,
                 menuMessageId,

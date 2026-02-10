@@ -1,17 +1,9 @@
-import { NextResponse } from "next/server";
-
-export async function POST(req, res) {
+export async function deletePost(postId) {
     try {
-        const request = await req.json();
-        const { postId } = request;
+        
         
         console.log("Recibiendo solicitud de eliminación del post:", { postId });
         
-        if (!postId) {
-            console.log("Faltan parámetros:", request);
-            return NextResponse.json({ error: "Faltan parámetros obligatorios." }, { status: 400 });
-        }
-   
 
         const response = await fetch(`${process.env.WEB_URL}/api/bot/delete`, {
             method: 'POST',
@@ -30,13 +22,13 @@ export async function POST(req, res) {
 
         if (response.status !== 200) {
             console.log("Error al eliminar el post:", responseText);
-            return NextResponse.json({ error: "Error al eliminar el post." }, { status: response.status });
+            return { error: "Error al eliminar el post." }
         }
 
-        return NextResponse.json({ success: true, status: response.status });
+        return { success: true, status: response.status }
 
     } catch (error) {
         console.error("Error en /api/delete:", error);
-        return NextResponse.json({ error: "Error interno del servidor." }, { status: 500 });
+        return { error: "Error interno del servidor." }
     }
 }
