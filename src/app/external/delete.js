@@ -1,9 +1,11 @@
-export async function deletePost(postId) {
+import { prisma } from "@/libs/prisma"
+
+export async function deletePost(postId, userStateId) {
     try {
-        
-        
+
+
         console.log("Recibiendo solicitud de eliminación del post:", { postId });
-        
+
 
         const response = await fetch(`${process.env.WEB_URL}/api/bot/delete`, {
             method: 'POST',
@@ -24,6 +26,15 @@ export async function deletePost(postId) {
             console.log("Error al eliminar el post:", responseText);
             return { error: "Error al eliminar el post." }
         }
+
+        await prisma.managePosts.delete({
+            where: {
+                externalId_userStateId: { 
+                    externalId: String(postId),
+                    userStateId: userStateId
+                }
+            }
+        })
 
         return { success: true, status: response.status }
 

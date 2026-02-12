@@ -1,13 +1,14 @@
+import { prisma } from "@/libs/prisma"
+import { makePreview } from "../utils/managePosts";
 
-
-export async function edit(content, postId) {
+export async function edit(content, postId, userStateId) {
     try {
 
-        
-        console.log("Recibiendo solicitud de edición:", { content, postId });
-        
 
-        console.log(`Enviando modificaciones para post ${postId}: ${content.substring(0, 50)}...`);    
+        console.log("Recibiendo solicitud de edición:", { content, postId });
+
+
+        console.log(`Enviando modificaciones para post ${postId}: ${content.substring(0, 50)}...`);
 
         const response = await fetch(`${process.env.WEB_URL}/api/bot/edit`, {
             method: 'POST',
@@ -29,6 +30,18 @@ export async function edit(content, postId) {
             console.log("Error al enviar el post:", responseText);
             return { error: "Error al editar el post." }
         }
+
+        await prisma.managePosts.update({
+            where: {
+                externalId_userStateId: { 
+                    externalId: String(postId),
+                    userStateId: userStateId
+                }
+            },
+            data: {
+                preview: makePreview(content)
+            }
+        })
 
         return { success: true }
 

@@ -1,11 +1,12 @@
 import crypto from 'crypto';
 import { getPosts } from "@/app/commands/myposts"
 import { Markup } from 'telegraf';
-import { userStates, cache } from '@/app/utils/consts';
 import { sendPost } from '@/app/commands/post'
-import { apiEdit, apiDelete } from '@/app/commands/myposts'
-import { apiComment } from '@/app/utils/notifyUtils'
+import { editMyPost, deleteMyPost } from '@/app/commands/myposts'
+import { sendComment} from '@/app/utils/notifyUtils'
 import { prisma } from '@/libs/prisma'
+import { getUserState, updateUserState } from "../utils/userStates";
+import { replaceMenu, getMenu } from "../utils/menus";
 
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY; 
 const IV_LENGTH = 16;
@@ -67,9 +68,9 @@ export function deriveSecretKey(pin, salt) {
 
 
 
-export function clearUserState(userId) {
-    delete userStates[userId];
-}
+// export function clearUserState(userId) {
+//     delete userStates[userId];
+// }
 
 
 
@@ -134,8 +135,9 @@ export function handleInput(bot) {
     bot.action(/^pin_(.*)/, async (ctx) => {
         const action = ctx.match[1]
         console.log("Acción: ", action)
-        const userId = ctx.from.id
-        const state = userStates[userId]
+        const userId = String(ctx.from.id)
+        // const state = userStates[userId]
+        const state = await getUserState(userId)
 
         if (!state) {
             await ctx.answerCbQuery("Sesión expirada.")
@@ -150,18 +152,22 @@ export function handleInput(bot) {
 
         let step = action === 'edit' ? 'waiting_pin_edit' : action === 'delete' ? 'waiting_pin_delete' : ''
         console.log("Step: ", step)
-        userStates[userId] = {
-            ...state,
-            step: step,
-            menuMessageId: messageId
-        };
+        // userStates[userId] = {
+        //     ...state,
+        //     step: step,
+        //     menuMessageId: messageId
+        // };
+
+        await updateUserState(userId, { step: step })
+        await replaceMenu(state.id, messageId, { type: 'cancel_menu' })
         await ctx.answerCbQuery();
     })
 
 
     bot.on('text', async (ctx, next) => {
-        const userId = ctx.from.id
-        const state = userStates[userId]
+        const userId = String(ctx.from.id)
+        // const state = userStates[userId]
+        const state = await getUserState(userId)
 
 
         if (!state || ctx.message.text.startsWith('/')) {
@@ -192,35 +198,43 @@ export function handleInput(bot) {
 
 
 async function handleTextInput(ctx, state) {
-    const userId = ctx.from.id
+    const userId = String(ctx.from.id)
     const postContent = ctx.message.text
-    const board = state.board
+    const boardId = state.boardId
     const postId = state.postId
+    const menu = await getMenu(state.id)
     await ctx.deleteMessage().catch(() => { })
-    if (state.menuMessageId) {
-        await ctx.telegram.deleteMessage(ctx.chat.id, state.menuMessageId).catch(() => { });
+    if (menu.messageId) {
+        await ctx.telegram.deleteMessage(ctx.chat.id, menu.messageId).catch(() => { });
     }
 
     let sentMsg
 
     if (state.step === 'waiting_text') {
-        sentMsg = await ctx.reply(`Tu post para publicar en /${board}/: \n\n${postContent}`, await getConfirmationMenu(userId))
+        sentMsg = await ctx.reply(`Tu post para publicar en /${boardId}/: \n\n${postContent}`, await getConfirmationMenu(userId))
     } else if (state.step === 'editing_text') {
         sentMsg = await ctx.reply(`Nueva versión del post: \n\n${postContent}`, await getConfirmationEditMenu(userId))
     } else if (state.step === 'waiting_text_comment') {
         sentMsg = await ctx.reply(`Tu comentario para responder al post ${postId}:\n\n${postContent}`, await getConfirmationCommentMenu(userId))
     }
-    userStates[userId] = {
-        ...state,
+    // userStates[userId] = {
+    //     ...state,
+    //     step: 'waiting_confirmation',
+    //     content: postContent,
+    //     menuMessageId: sentMsg.message_id
+    // };
+
+    await updateUserState(userId, { 
         step: 'waiting_confirmation',
-        content: postContent,
-        menuMessageId: sentMsg.message_id
-    };
+        content: postContent
+    })
+    await replaceMenu(state.id, sentMsg.message_id, { type: 'cancel_menu' })
 }
 
 async function handlePinInput(ctx, state) {
-    const userId = ctx.from.id
+    const userId = String(ctx.from.id)
     const pin = ctx.message.text
+    const menu = await getMenu(state.id)
 
     console.log(`[DEBUG] handlePinInput - userId: ${userId}, step: ${state.step}, pin: ${pin}`);
 
@@ -229,7 +243,7 @@ async function handlePinInput(ctx, state) {
 
         await safeEditMessageText(
             ctx,
-            state.menuMessageId,
+            menu.messageId,
             `El PIN debe ser de 6 dígitos. Intenta de nuevo.`,
             Markup.inlineKeyboard([
                 [Markup.button.callback('Cancelar', 'cancel')]
@@ -243,7 +257,7 @@ async function handlePinInput(ctx, state) {
 
         await safeEditMessageText(
             ctx,
-            state.menuMessageId,
+            menu.messageId,
             "Verificando PIN y publicando..."
         );
 
@@ -253,7 +267,7 @@ async function handlePinInput(ctx, state) {
 
         await safeEditMessageText(
             ctx,
-            state.menuMessageId,
+            menu.messageId,
             "Verificando PIN y obteniendo tus posts..."
         );
         await cacheUserPin(userId.toString(), pin);
@@ -261,32 +275,32 @@ async function handlePinInput(ctx, state) {
     } else if (state.step === 'waiting_pin_edit') {
         await safeEditMessageText(
             ctx,
-            state.menuMessageId,
+            menu.messageId,
             "Verificando PIN y editando..."
         )
         await cacheUserPin(userId.toString(), pin)
-        await apiEdit(ctx)
+        await editMyPost(ctx)
     } else if (state.step === 'waiting_pin_delete') {
         await safeEditMessageText(
             ctx,
-            state.menuMessageId,
+            menu.messageId,
             "Verificando PIN y borrando..."
         )
         await cacheUserPin(userId.toString(), pin)
-        await apiDelete(ctx)
+        await deleteMyPost(ctx)
     } else if (state.step === 'waiting_pin_comment') {
         await safeEditMessageText(
             ctx,
-            state.menuMessageId,
+            menu.messageId,
             "Verificando PIN y respondiendo..."
         )
         await cacheUserPin(userId.toString(), pin)
-        await apiComment(ctx)
+        await sendComment(ctx)
     }
 }
 
 // export function isCached(ctx) {
-//     const userId = ctx.from.id
+//     const userId = String(ctx.from.id)
 //     return cache.has(userId.toString())
 // }
 

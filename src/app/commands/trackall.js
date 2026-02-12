@@ -1,7 +1,7 @@
 import { prisma } from "@/libs/prisma"
 
 export default async (ctx) => {
-    const userId = ctx.from.id
+    const userId = String(ctx.from.id)
     const user = await prisma.users.findFirst({
         where: {
             chat_id: userId.toString()

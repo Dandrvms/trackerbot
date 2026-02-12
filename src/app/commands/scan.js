@@ -1,7 +1,10 @@
 import { safeEditMessageText, clearUserState, getCachedPin } from "@/app/utils/utils";
 import { Markup } from 'telegraf';
-import { userStates } from '@/app/utils/consts';
+// import { userStates } from '@/app/utils/consts';
 import { getAllPosts } from "@/app/external/getAllPosts";
+import { getUserState, updateUserState } from "../utils/userStates";
+import { replaceMenu, getMenu } from "../utils/menus";
+import { createScanSession, storeScanData, getScanPosts, getScanPostDetail, } from "../utils/scanSession";
 
 
 
@@ -14,32 +17,41 @@ const keyboard = Markup.inlineKeyboard([
 ]);
 
 export default async (ctx) => {
-    const userId = ctx.from.id;
+    const userId = String(ctx.from.id);
     ctx.deleteMessage().catch(() => { });
-    
+
     const sentMsg = await ctx.reply("¿Qué tablón quieres navegar?", keyboard)
-    const state = userStates[userId]
-    userStates[userId] = {
-        ...state,
-        menuMessageId: sentMsg.message_id
-    }
+    // const state = userStates[userId]
+    // userStates[userId] = {
+    //     ...state,
+    //     menuMessageId: sentMsg.message_id
+    // }
+    const state = await getUserState(userId)
+    await replaceMenu(state.id, sentMsg.message_id, { type: 'dialog_menu' })
 }
 
 export function handleScan(bot) {
 
     const safeAnswer = async (ctx) => {
-        try { await ctx.answerCbQuery() } catch (e) { console.log("Query expirada") }
+        try { await ctx.answerCbQuery() } catch (e) { console.log("Query expirada:",e) }
     }
 
     bot.action(/^get_(.*)$/, async (ctx) => {
         const boardId = ctx.match[1]
-        const userId = ctx.from.id
-        const state = userStates[userId]
-        userStates[userId] = {
-            ...state,
-            boardId: boardId
+        const userId = String(ctx.from.id)
+        const state = await getUserState(userId)
+        const menu = await getMenu(state.id)
+        if (!state) {
+            await ctx.reply('Error: Sesión inválida.')
+            return
         }
-        await safeEditMessageText(ctx, state.menuMessageId, "Obteniendo posts...")
+        await updateUserState(userId, { boardId: boardId })
+        // const state = userStates[userId]
+        // userStates[userId] = {
+        //     ...state,
+        //     boardId: boardId
+        // }
+        await safeEditMessageText(ctx, menu.messageId, "Obteniendo posts...")
         await getPosts(ctx)
     })
 
@@ -64,18 +76,18 @@ export function handleScan(bot) {
 
     bot.action(/^view_c_detail_(\d+)$/, async (ctx) => {
         const commentId = ctx.match[1]
-        console.log("c1:",commentId)
         await viewCommentDetail(ctx, commentId)
         safeAnswer(ctx)
     })
 
     bot.action(/^view_comments_(\d+)$/, async (ctx) => {
         const postId = ctx.match[1]
-        const state = userStates[ctx.from.id]
-        userStates[ctx.from.id] = {
-            ...state,
-            postId: postId
-        }
+        const state = await updateUserState(String(ctx.from.id), { postId: Number(postId) })
+        // const state = userStates[ctx.from.id]
+        // userStates[ctx.from.id] = {
+        //     ...state,
+        //     postId: postId
+        // }
         await getComments(ctx)
         safeAnswer(ctx)
     })
@@ -87,12 +99,14 @@ export function handleScan(bot) {
     })
 
     bot.action('back_list', async (ctx) => {
-        const state = userStates[ctx.from.id]
+        // const state = userStates[ctx.from.id]
+        const state = await getUserState(String(ctx.from.id))
+        const menu = await getMenu(state.id)
         if (!state) {
             await ctx.answerCbQuery("La sesión expiró. Por favor, usa /myposts de nuevo.");
             return;
         }
-        const page = state?.currentPage || 0
+        const page = menu?.currentPage || 0
         if (state.step === 'viewing_post') await getPosts(ctx, page)
         else if (state.step === 'viewing_comment_detail') await getComments(ctx, page)
         safeAnswer(ctx)
@@ -100,53 +114,77 @@ export function handleScan(bot) {
 }
 
 
-async function getComments(ctx, page = 0) {
-    const userId = ctx.from.id
-    let state = userStates[userId]
+export async function getComments(ctx, page = 0) {
+    const userId = String(ctx.from.id)
+    // let state = userStates[userId]
+    const state = await getUserState(userId)
     const postId = state.postId
 
-    const comments = state.Posts.find(p => p.id == postId).comments
-    const content = state.Posts.find(p => p.id == postId).content
-    userStates[userId] = {
-        ...state,
-        step: "viewing_comments",
-        content: content
+    if (!state.scanSessionId || !state.postId) return
+
+    const post = await getScanPostDetail(
+        state.scanSessionId,
+        postId
+    )
+
+    if (!post) {
+        return ctx.reply("Post no encontrado.")
     }
 
-    await renderList(ctx, comments, page)
+
+    // const comments = state.Posts.find(p => p.id == postId).comments
+    // const content = state.Posts.find(p => p.id == postId).content
+    // userStates[userId] = {
+    //     ...state,
+    //     step: "viewing_comments",
+    //     content: content
+    // }
+    await updateUserState(userId, { step: 'viewing_comments', content: post.preview })
+
+    await renderList(ctx, post.comments, page)
 }
 
 
 export async function getPosts(ctx, page = 0) {
-    const userId = ctx.from.id;
-    let state = userStates[userId];
+    const userId = String(ctx.from.id);
+    // let state = userStates[userId];
+    const state = await getUserState(userId)
     const boardId = state.boardId
+    const menu = await getMenu(state.id)
+    let sessionId = state?.scanSessionId
 
 
-    if (!state.Posts) {
+    if (!state.scanSessionId) {
 
         const { error, posts } = await getAllPosts(boardId)
 
         if (error) {
-            return ctx.telegram.editMessageText(ctx.chat.id, state.menuMessageId, null, "Error al obtener posts.");
+            return ctx.telegram.editMessageText(ctx.chat.id, menu.messageId, null, "Error al obtener posts.");
         }
 
-        state.Posts = posts
+        const session = await createScanSession(state.id)
+        await storeScanData(session.id, posts)
+        sessionId = session.id
+
 
     }
 
-    userStates[userId] = {
-        ...state,
-        step: 'viewing_list'
-    }
+    const scanPosts = await getScanPosts(sessionId)
+    await updateUserState(userId, { step: 'viewing_list' })
+    // userStates[userId] = {
+    //     ...state,
+    //     step: 'viewing_list'
+    // }
 
-    await renderList(ctx, state.Posts, page)
+    await renderList(ctx, scanPosts, page)
 
 }
 
 
 async function renderList(ctx, posts, page) {
-    let state = userStates[ctx.from.id]
+    // let state = userStates[ctx.from.id]
+    const state = await getUserState(ctx.from.id.toString())
+    const menu = await getMenu(state.id)
 
     const POSTS_PER_PAGE = 10
 
@@ -179,8 +217,8 @@ async function renderList(ctx, posts, page) {
     paginatedItems.forEach((msg, index) => {
 
 
-        const snippet = msg.content.substring(0, 50) + (msg.content.length > 50 ? '...' : '')
-        buttons.push([Markup.button.callback(`${snippet}`, `${detail}_${msg.id}`)])
+        const snippet = msg.externalId + '. ' + msg.preview.substring(0, 50) + (msg.preview.length > 50 ? '...' : '')
+        buttons.push([Markup.button.callback(`${snippet}`, `${detail}_${msg.externalId}`)])
     });
 
 
@@ -197,64 +235,72 @@ async function renderList(ctx, posts, page) {
 
     buttons.push([Markup.button.callback('Cerrar', 'cancel')]);
 
-    await safeEditMessageText(ctx, state.menuMessageId, replyText, Markup.inlineKeyboard(buttons));
+    await safeEditMessageText(ctx, menu.messageId, replyText, Markup.inlineKeyboard(buttons));
 
-    
-    userStates[ctx.from.id] = { ...state, currentPage: page };
+
+    // userStates[ctx.from.id] = { ...state, currentPage: page };
+    replaceMenu(state.id, menu.messageId, { currentPage: page, type: 'post_menu' })
 }
 
 
 export async function viewPostDetail(ctx, postId) {
-    const userId = ctx.from.id;
-    const state = userStates[userId];
+    const userId = String(ctx.from.id);
+    // const state = userStates[userId];
 
-    userStates[userId] = {
-        ...state,
-        step: 'viewing_post'
-    }
+    // userStates[userId] = {
+    //     ...state,
+    //     step: 'viewing_post'
+    // }
+    const state = await updateUserState(userId, { step: 'viewing_post', postId: Number(postId) })
+    const menu = await getMenu(state.id)
+    const boardId = state.boardId
+    const post = await getScanPostDetail(state.scanSessionId, postId)
 
 
-    const post = state.Posts.find(p => p.id == postId);
+    
 
     if (!post) return ctx.answerCbQuery("Post no encontrado.");
 
-    const url = `${process.env.BOARDS_URL}${post.boardId}#${post.id}`;
-    let detailText = `<b>Post #${post.id}</b> en`;
-    detailText += `<code>/${post.boardId}/</code>\n\n`;
-    detailText += `${post.content.slice(0, 1000).replace(/</g, "&lt;").replace(/>/g, "&gt;")} ${post.content.length > 1000 ? ' (...)' : ''}`;
+    const url = `${process.env.BOARDS_URL}${boardId}#${post.externalId}`;
+    let detailText = `<b>Post #${post.externalId}</b> en`;
+    detailText += `<code>/${state.boardId}/</code>\n\n`;
+    detailText += `${post.preview.slice(0, 1000).replace(/</g, "&lt;").replace(/>/g, "&gt;")} ${post.preview.length > 1000 ? ' (...)' : ''}`;
     detailText += `\n\n<a href="${url}">Ver en la web</a>`;
 
     const buttons = Markup.inlineKeyboard([
-        [Markup.button.callback(`Ver comentarios (${post.comments.length})`, `view_comments_${post.id}`)],
-        [Markup.button.callback('Seguir', `track_${post.id}`)],
-        [Markup.button.callback('Resp.', `reply_post_${post.id}_${post.boardId}`)],
+        [Markup.button.callback(`Ver comentarios (${post.comments.length})`, `view_comments_${post.externalId}`)],
+        [Markup.button.callback('Seguir', `track_${post.externalId}`)],
+        [Markup.button.callback('Resp.', `reply_post_${post.externalId}_${state.boardId}`)],
         [Markup.button.callback('⬅ Volver a la lista', `back_list`)]
     ]);
 
-    await safeEditMessageText(ctx, state.menuMessageId, detailText, buttons);
+    await safeEditMessageText(ctx, menu.messageId, detailText, buttons);
 }
 
 
 export async function viewCommentDetail(ctx, commentId) {
-    console.log("c2:",commentId)
-    const userId = ctx.from.id;
-    const state = userStates[userId];
+    
+    const userId = String(ctx.from.id);
+    // const state = userStates[userId];
+    const state = await updateUserState(userId, { step: 'viewing_comment_detail' })
+    const menu = await getMenu(state.id)
     const postId = state.postId
     const boardId = state.boardId
-
-    userStates[userId] = {
-        ...state,
-        step: 'viewing_comment_detail'
-    }
+    const comment = (await getScanPostDetail(state.scanSessionId, postId)).comments?.find(c => c.externalId == commentId)
     
-    const comment = state.Posts.find(p => p.id == postId)?.comments?.find(c => c.id == commentId);
+    // userStates[userId] = {
+    //     ...state,
+    //     step: 'viewing_comment_detail'
+    // }
+
+    // const comment = state.Posts.find(p => p.id == postId)?.comments?.find(c => c.id == commentId);
 
     if (!comment) return ctx.answerCbQuery("Comentario no encontrado.");
 
     const url = `${process.env.BOARDS_URL}${state.boardId}/${postId}/comments`;
     let detailText = `<b>Comentario #${commentId}</b> en `;
     detailText += `'${state.content}'\n\n`;
-    detailText += `${comment.content.slice(0, 1000).replace(/</g, "&lt;").replace(/>/g, "&gt;")} ${comment.content.length > 1000 ? ' (...)' : ''}`;
+    detailText += `${comment.preview.slice(0, 1000).replace(/</g, "&lt;").replace(/>/g, "&gt;")} ${comment.preview.length > 1000 ? ' (...)' : ''}`;
     detailText += `\n\n<a href="${url}">Ver en la web</a>`;
 
     const buttons = Markup.inlineKeyboard([
@@ -262,5 +308,5 @@ export async function viewCommentDetail(ctx, commentId) {
         [Markup.button.callback('⬅ Volver a la lista', `back_list`)]
     ]);
 
-    await safeEditMessageText(ctx, state.menuMessageId, detailText, buttons);
+    await safeEditMessageText(ctx, menu.messageId, detailText, buttons);
 }

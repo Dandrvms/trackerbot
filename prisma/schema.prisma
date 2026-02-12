@@ -20,12 +20,14 @@ model Users {
 model ManagePosts {
     id                  Int @id @default(autoincrement())
     externalId          String
-    userId              Int
     preview             String
-    sessionId           Int
+    userStateId         Int
     expiresAt           DateTime
+    boardId             String
 
-    @@index([sessionId])
+    @@index([userStateId])
+    @@unique([externalId, userStateId])
+
 }
 
 
@@ -54,11 +56,12 @@ model User_States {
     id                  Int          @id @default(autoincrement())
     userId              String       @unique
     step                String?
+    previousStep        String?
     menus               Menus[]
     scanSessionId       Int?          @unique
     scanSession         ScanSession? @relation(fields: [scanSessionId], references: [id])
     postId              Int?
-    boardId             Int?
+    boardId             String?
     content             String?
     updatedAt           DateTime     @updatedAt
     createdAt           DateTime     @default(now())
@@ -77,14 +80,14 @@ model Menus {
 
 model ScanSession {
     id                  Int      @id @default(autoincrement())
-    userId              String
     createdAt           DateTime @default(now())
     expiresAt           DateTime
+    userStateId         Int
     userState           User_States?
 
     scanPosts           ScanPost[]
 
-    @@index([userId])
+    @@index([userStateId])
 }
 
 model ScanPost {

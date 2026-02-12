@@ -2,6 +2,7 @@
 
 import { prisma } from "@/libs/prisma"
 import { generateSalt, deriveSecretKey } from "@/app/utils/utils";
+import { makePreview } from "../utils/managePosts";
 
 async function getSalt(user){
     const salt = await prisma.users.findFirst({
@@ -20,14 +21,14 @@ async function getSalt(user){
     return salt.salt;
 }
 
-export async function post(content, board, pin, user) {
+export async function post(content, boardId, pin, user, userStateId) {
 
     
     const salt = await getSalt(user);
     const derivedKey = deriveSecretKey(pin, salt);
 
     console.log(`Usuario ${user} con PIN ${pin}`);
-    console.log(`Enviando post al tablón ${board}: ${content}`);    
+    console.log(`Enviando post al tablón ${boardId}: ${content}`);    
 
     const response = await fetch(`${process.env.WEB_URL}/api/bot/post`,{
         method: 'POST',
@@ -38,7 +39,7 @@ export async function post(content, board, pin, user) {
         },
         body: JSON.stringify({
             content: content,
-            board: board,
+            board: boardId,
             derivedKey: derivedKey,
         })
     })
@@ -49,6 +50,18 @@ export async function post(content, board, pin, user) {
         console.log("Error al enviar el post: ", await response.text())
         return { error: "Error al enviar el post." }
     }
+
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000)
+
+    await prisma.managePosts.create({
+        data: {
+            externalId: String(data.id),
+            preview: makePreview(data.content),
+            userStateId,
+            boardId,
+            expiresAt,
+        }
+    })
 
 
 

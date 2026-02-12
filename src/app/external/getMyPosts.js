@@ -1,7 +1,6 @@
-import { NextResponse } from 'next/server';
 import { deriveSecretKey, generateSalt } from '@/app/utils/utils';
 import { prisma } from '@/libs/prisma';
-async function getSalt(user){
+async function getSalt(user) {
     const salt = await prisma.users.findFirst({
         where: { chat_id: user },
         select: { salt: true }
@@ -24,7 +23,7 @@ export async function getMyPosts(user, pin) {
     const salt = await getSalt(user);
     const derivedKey = deriveSecretKey(pin, salt);
 
-    const response = await fetch(`${process.env.WEB_URL}/api/bot/getposts`,{
+    const response = await fetch(`${process.env.WEB_URL}/api/bot/getposts`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -40,8 +39,8 @@ export async function getMyPosts(user, pin) {
         return { error: "Error al obtener los posts." }
     }
     const messages = await response.json()
-    
+
     console.log("posts: ", messages)
 
-    return NextResponse.json(messages);
+    return { messages: messages }
 }
