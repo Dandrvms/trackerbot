@@ -28,8 +28,6 @@ export async function comment(postId, content, pin, user) {
     const salt = await getSalt(user);
     const derivedKey = deriveSecretKey(pin, salt);
 
-    console.log(`Usuario ${user} con PIN ${pin}`);
-    console.log(`Enviando respuesta al post ${postId}: ${content}`);    
 
     const response = await fetch(`${process.env.WEB_URL}/api/bot/comment`,{
         method: 'POST',

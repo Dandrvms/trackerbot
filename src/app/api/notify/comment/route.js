@@ -14,7 +14,6 @@ export async function POST(req, res) {
     const request = await req.json();
     const { id, content, postId, boardId } = request;
     if (!id || !content || !postId || !boardId) {
-        console.log(request)
         return NextResponse.json({ error: "Faltan parámetros obligatorios." }, { status: 400 });
     }
 
@@ -36,7 +35,7 @@ export async function POST(req, res) {
 
     })
 
-    console.log(users)
+ 
 
     const postContent = await prisma.trackings.findFirst({
         where: {

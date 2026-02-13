@@ -12,7 +12,6 @@ export async function getAllPosts(boardId) {
     });
 
     if (response.status != 200) {
-        console.log("Error al obtener los posts: ", await response.text())
         return { error: "Error al obtener los posts." }
     }
     const posts = await response.json()

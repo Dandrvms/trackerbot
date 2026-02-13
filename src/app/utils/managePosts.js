@@ -16,7 +16,6 @@ export async function getUniquePost(postId) {
             externalId: postId
         }
     })
-    console.log(post)
     return post
 }
 

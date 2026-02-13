@@ -4,7 +4,7 @@ export default async (ctx) => {
     const chatId = String(ctx.chat.id)
     const text = ctx.message.text.split(" ")
     let postId
-    console.log(text)
+    
 
     if (text.length < 2) {
         ctx.reply("Uso correcto: \n\n/track <Número del post>")

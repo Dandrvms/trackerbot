@@ -15,11 +15,9 @@ export async function POST(req, res) {
 
 
     const request = await req.json();
-    console.log("Request: ", request)
     const { content , id, boardId } = request;
 
     if (!id || !content || !boardId) {
-        console.log(request)
         return NextResponse.json({ error: "Faltan parámetros obligatorios." }, { status: 400 });
     }
 

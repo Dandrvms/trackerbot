@@ -138,7 +138,7 @@ export async function getComments(ctx, page = 0) {
         return ctx.reply("Post no encontrado.")
     }
 
-    console.log("POST:",post)
+    
 
 
     // const comments = state.Posts.find(p => p.id == postId).comments
@@ -254,8 +254,6 @@ async function renderList(ctx, posts, page) {
 
     buttons.push([Markup.button.callback('Cerrar', 'cancel')]);
 
-    console.log("MENU:",menu)
-    console.log("REPLY TEXT:", replyText)
 
     await safeEditMessageText(ctx, menu.messageId, replyText, Markup.inlineKeyboard(buttons));
 

@@ -4,12 +4,6 @@ import { makePreview } from "../utils/managePosts";
 export async function edit(content, postId, userStateId) {
     try {
 
-
-        console.log("Recibiendo solicitud de edición:", { content, postId });
-
-
-        console.log(`Enviando modificaciones para post ${postId}: ${content.substring(0, 50)}...`);
-
         const response = await fetch(`${process.env.WEB_URL}/api/bot/edit`, {
             method: 'POST',
             headers: {
@@ -24,10 +18,8 @@ export async function edit(content, postId, userStateId) {
         });
 
         const responseText = await response.text();
-        console.log("Respuesta de API externa:", { status: response.status, body: responseText });
 
         if (response.status !== 200) {
-            console.log("Error al enviar el post:", responseText);
             return { error: "Error al editar el post." }
         }
 

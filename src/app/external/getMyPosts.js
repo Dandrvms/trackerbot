@@ -35,12 +35,10 @@ export async function getMyPosts(user, pin) {
     });
 
     if (response.status != 200) {
-        console.log("Error al obtener los posts: ", await response.text())
         return { error: "Error al obtener los posts." }
     }
     const messages = await response.json()
 
-    console.log("posts: ", messages)
 
     return { messages: messages }
 }

@@ -80,7 +80,6 @@ export function handleNavigation(bot) {
 
     bot.action(/^confirm_delete_(\d+)$/, async (ctx) => {
         const postId = ctx.match[1]
-        console.log("se borra el post", postId)
         await DeletePost(ctx, postId)
         safeAnswer(ctx)
     })
@@ -88,7 +87,6 @@ export function handleNavigation(bot) {
 
     bot.action(/^edit_post_(\d+)$/, async (ctx) => {
         const postId = ctx.match[1]
-        console.log("Se edita el post", postId)
         await EditPost(ctx, postId)
         safeAnswer(ctx)
     })
@@ -163,7 +161,7 @@ async function EditPost(ctx, postId) {
     const userState = await updateUserState(userId, { step: 'editing_text', postId: Number(postId) })
     await replaceMenu(userState.id, response.message_id, { type: 'cancel_menu' })
 
-    console.log("Response: ", response)
+ 
     // userStates[ctx.from.id] = {
     //     ...state,
     //     step: "editing_text",
@@ -219,9 +217,7 @@ export async function getPosts(ctx, page = 0) {
     const state = await getUserState(userId)
     let myposts = await getMyPostsForState(state.id)
     const menu = await getMenu(state.id)
-    console.log("MY POSTS: ", myposts)
     if (myposts.length === 0) {
-        console.log("NO HAY")
         const pin = await getCachedPin(userId)
         if (!pin)
             if (ctx.updateType === 'callback_query') {
@@ -247,25 +243,21 @@ export async function getPosts(ctx, page = 0) {
         if (error) {
             return ctx.telegram.editMessageText(ctx.chat.id, menu.messageId, null, "Error al obtener posts.");
         }
-        console.log("Extraidos de la api: ", messages)
         await setMyPostsForState(state.id, messages)
 
         myposts = await getMyPostsForState(state.id)
 
-        // state.myPosts = messages
-        // console.log("aqui", state.myPosts)
+     
     }
 
 
 
     const messages = myposts
-    console.log("Extraidos de myposts: ", messages)
     const totalPages = Math.ceil(messages.length / POSTS_PER_PAGE);
 
     const start = page * POSTS_PER_PAGE;
     const end = start + POSTS_PER_PAGE;
     const paginatedItems = messages.slice(start, end);
-    console.log("Paginated items: ", paginatedItems)
 
     let replyText = `<b>Tus posts publicados (${page + 1}/${totalPages}):</b>\n\n`;
 

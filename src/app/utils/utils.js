@@ -134,7 +134,6 @@ export function handleInput(bot) {
 
     bot.action(/^pin_(.*)/, async (ctx) => {
         const action = ctx.match[1]
-        console.log("Acción: ", action)
         const userId = String(ctx.from.id)
         // const state = userStates[userId]
         const state = await getUserState(userId)
@@ -151,7 +150,7 @@ export function handleInput(bot) {
         ]))
 
         let step = action === 'edit' ? 'waiting_pin_edit' : action === 'delete' ? 'waiting_pin_delete' : ''
-        console.log("Step: ", step)
+     
         // userStates[userId] = {
         //     ...state,
         //     step: step,
@@ -173,7 +172,7 @@ export function handleInput(bot) {
         if (!state || ctx.message.text.startsWith('/')) {
             return next()
         }
-        console.log("State step: ", state.step)
+        
         switch (state.step) {
             case 'waiting_text': case 'editing_text': case 'waiting_text_comment':
                 await handleTextInput(ctx, state);
@@ -236,7 +235,7 @@ async function handlePinInput(ctx, state) {
     const pin = ctx.message.text
     const menu = await getMenu(state.id)
 
-    console.log(`[DEBUG] handlePinInput - userId: ${userId}, step: ${state.step}, pin: ${pin}`);
+
 
     await ctx.deleteMessage().catch(() => { })
     if (!/^\d{6}$/.test(pin)) {

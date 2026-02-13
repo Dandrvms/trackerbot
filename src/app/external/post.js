@@ -27,8 +27,6 @@ export async function post(content, boardId, pin, user, userStateId, scanSession
     const salt = await getSalt(user);
     const derivedKey = deriveSecretKey(pin, salt);
 
-    console.log(`Usuario ${user} con PIN ${pin}`);
-    console.log(`Enviando post al tablón ${boardId}: ${content}`);
 
     const response = await fetch(`${process.env.WEB_URL}/api/bot/post`, {
         method: 'POST',
@@ -47,7 +45,6 @@ export async function post(content, boardId, pin, user, userStateId, scanSession
     const data = await response.json();
 
     if (response.status != 200) {
-        console.log("Error al enviar el post: ", await response.text())
         return { error: "Error al enviar el post." }
     }
 

@@ -4,7 +4,7 @@ export async function deletePost(postId, userStateId) {
     try {
 
 
-        console.log("Recibiendo solicitud de eliminación del post:", { postId });
+        
 
 
         const response = await fetch(`${process.env.WEB_URL}/api/bot/delete`, {
@@ -20,10 +20,8 @@ export async function deletePost(postId, userStateId) {
         });
 
         const responseText = await response.text();
-        console.log("Respuesta de API externa:", { status: response.status, body: responseText });
 
         if (response.status !== 200) {
-            console.log("Error al eliminar el post:", responseText);
             return { error: "Error al eliminar el post." }
         }
 

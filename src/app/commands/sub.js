@@ -52,5 +52,5 @@ export default async (ctx) => {
         }
     }
 
-    console.log(text)
+    
 }
