@@ -39,6 +39,7 @@ export async function sendPost(ctx) {
     const pin = await getCachedPin(userId)
     const menu = await getMenu(state.id)
 
+
     if (!state || !menu) {
         return ctx.answerCbQuery("Sesión expirada o inválida.")
     }
@@ -56,7 +57,7 @@ export async function sendPost(ctx) {
 
         const { boardId, content } = state
 
-        const { error, id, cont } = await post(content, boardId, pin, userId.toString(), state.id)
+        const { error, id, cont } = await post(content, boardId, pin, userId.toString(), state.id, state.scanSession.id)
 
         if (error) {
             console.log("Error en la API al postear: ", await response.text())
@@ -84,7 +85,18 @@ export async function sendPost(ctx) {
             const newState = await updateUserState(userId, { step: state.previousStep, previousStep: null })
             const sentMsg = await ctx.reply('Volviendo al menú anterior...')
             const newMenu = await replaceMenu(state.id, sentMsg.message_id, { type: 'waiting', currentPage: menu.currentPage })
-            newState.step === 'viewing_post' ? await getPosts(ctx, newMenu.currentPage) : await getComments(ctx, newMenu.currentPage)
+
+            if (newState.step === 'viewing_comment_detail') {
+                await updateUserState(String(ctx.from.id), { commentContent: null, commentId: null })
+                await getComments(ctx, newMenu.currentPage)
+            } else {
+                await updateUserState(String(ctx.from.id), { content: null, postId: null })
+                await getPosts(ctx, newMenu.currentPage)
+            }
+        }
+
+        if (state.step === 'viewing_comment_detail') {
+            await updateUserState(String(ctx.from.id), { commentContent: null, commentId: null })
         }
 
     } catch (error) {
@@ -185,13 +197,20 @@ export function setUpPostHandlers(bot) {
         }
 
         ctx.deleteMessage();
-
+        await updateUserState(String(ctx.from.id), { content: null, postId: null, commentContent: null, commentId: null })
         if (state.previousStep) {
             const newState = await updateUserState(String(ctx.from.id), { step: state.previousStep, previousStep: null })
             const sentMsg = await ctx.reply('Volviendo al menú anterior...')
             const newMenu = await replaceMenu(state.id, sentMsg.message_id, { type: 'waiting', currentPage: menu.currentPage })
-            newState.step === 'viewing_post' ? await getPosts(ctx, newMenu.currentPage) : await getComments(ctx, newMenu.currentPage)
+
+            if (newState.step === 'viewing_comment_detail') {
+                await getComments(ctx, newMenu.currentPage)
+            } else {
+                await getPosts(ctx, newMenu.currentPage)
+            }
         }
+
+
 
 
     });

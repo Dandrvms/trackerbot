@@ -11,8 +11,10 @@ import { createScanSession, storeScanData, getScanPosts, getScanPostDetail, } fr
 const keyboard = Markup.inlineKeyboard([
     [
         Markup.button.callback('/webo/', 'get_webo'),
-        Markup.button.callback('/meta/', 'get_meta')
+        Markup.button.callback('/meta/', 'get_meta'),
+
     ],
+    [Markup.button.callback('/test/', 'get_test')],
     [Markup.button.callback('Cancelar', 'cancel')]
 ]);
 
@@ -26,14 +28,15 @@ export default async (ctx) => {
     //     ...state,
     //     menuMessageId: sentMsg.message_id
     // }
-    const state = await getUserState(userId)
+    
+    const state = await updateUserState(userId, { step: 'selecting_board' })
     await replaceMenu(state.id, sentMsg.message_id, { type: 'dialog_menu' })
 }
 
 export function handleScan(bot) {
 
     const safeAnswer = async (ctx) => {
-        try { await ctx.answerCbQuery() } catch (e) { console.log("Query expirada:",e) }
+        try { await ctx.answerCbQuery() } catch (e) { console.log("Query expirada:", e) }
     }
 
     bot.action(/^get_(.*)$/, async (ctx) => {
@@ -106,6 +109,11 @@ export function handleScan(bot) {
             await ctx.answerCbQuery("La sesión expiró. Por favor, usa /myposts de nuevo.");
             return;
         }
+
+        if (state.step === 'viewing_comment_detail') {
+            await updateUserState(String(ctx.from.id), { commentContent: null, commentId: null })
+        }
+
         const page = menu?.currentPage || 0
         if (state.step === 'viewing_post') await getPosts(ctx, page)
         else if (state.step === 'viewing_comment_detail') await getComments(ctx, page)
@@ -120,16 +128,17 @@ export async function getComments(ctx, page = 0) {
     const state = await getUserState(userId)
     const postId = state.postId
 
-    if (!state.scanSessionId || !state.postId) return
+    if (!state.scanSession.id || !state.postId) return
 
     const post = await getScanPostDetail(
-        state.scanSessionId,
+        state.scanSession.id,
         postId
     )
-
     if (!post) {
         return ctx.reply("Post no encontrado.")
     }
+
+    console.log("POST:",post)
 
 
     // const comments = state.Posts.find(p => p.id == postId).comments
@@ -151,10 +160,10 @@ export async function getPosts(ctx, page = 0) {
     const state = await getUserState(userId)
     const boardId = state.boardId
     const menu = await getMenu(state.id)
-    let sessionId = state?.scanSessionId
+    let sessionId = state?.scanSession?.id
 
 
-    if (!state.scanSessionId) {
+    if (!sessionId) {
 
         const { error, posts } = await getAllPosts(boardId)
 
@@ -169,7 +178,17 @@ export async function getPosts(ctx, page = 0) {
 
     }
 
-    const scanPosts = await getScanPosts(sessionId)
+    let scanPosts = await getScanPosts(sessionId, boardId)
+
+    if (scanPosts.length === 0) {
+        const { error, posts } = await getAllPosts(boardId)
+        if (error) {
+            return ctx.telegram.editMessageText(ctx.chat.id, menu.messageId, null, "Error al obtener posts.");
+        }
+        await storeScanData(sessionId, posts)
+        scanPosts = await getScanPosts(sessionId, boardId)
+    }
+
     await updateUserState(userId, { step: 'viewing_list' })
     // userStates[userId] = {
     //     ...state,
@@ -206,7 +225,7 @@ async function renderList(ctx, posts, page) {
         detail = 'view_c_detail'
         next = 'front_c_page'
         back = 'back_c_page'
-        replyText = `<b>comentarios del post ${state.postId}: '${state.content}' (${page + 1}/${totalPages}):</b>\n\n`;
+        replyText = `<b>comentarios del post ${state.postId}: '${state.content.slice(0, 100)}' (${page + 1}/${totalPages}):</b>\n\n`;
     }
 
 
@@ -235,6 +254,9 @@ async function renderList(ctx, posts, page) {
 
     buttons.push([Markup.button.callback('Cerrar', 'cancel')]);
 
+    console.log("MENU:",menu)
+    console.log("REPLY TEXT:", replyText)
+
     await safeEditMessageText(ctx, menu.messageId, replyText, Markup.inlineKeyboard(buttons));
 
 
@@ -254,10 +276,11 @@ export async function viewPostDetail(ctx, postId) {
     const state = await updateUserState(userId, { step: 'viewing_post', postId: Number(postId) })
     const menu = await getMenu(state.id)
     const boardId = state.boardId
-    const post = await getScanPostDetail(state.scanSessionId, postId)
+    const post = await getScanPostDetail(state.scanSession.id, postId)
+    await updateUserState(userId, { content: post.preview })
 
 
-    
+
 
     if (!post) return ctx.answerCbQuery("Post no encontrado.");
 
@@ -270,7 +293,7 @@ export async function viewPostDetail(ctx, postId) {
     const buttons = Markup.inlineKeyboard([
         [Markup.button.callback(`Ver comentarios (${post.comments.length})`, `view_comments_${post.externalId}`)],
         [Markup.button.callback('Seguir', `track_${post.externalId}`)],
-        [Markup.button.callback('Resp.', `reply_post_${post.externalId}_${state.boardId}`)],
+        [Markup.button.callback('Resp.', `reply_post_${post.externalId}_${post.boardId}`)],
         [Markup.button.callback('⬅ Volver a la lista', `back_list`)]
     ]);
 
@@ -279,15 +302,15 @@ export async function viewPostDetail(ctx, postId) {
 
 
 export async function viewCommentDetail(ctx, commentId) {
-    
+
     const userId = String(ctx.from.id);
     // const state = userStates[userId];
-    const state = await updateUserState(userId, { step: 'viewing_comment_detail' })
+    const state = await updateUserState(userId, { step: 'viewing_comment_detail', commentId: Number(commentId) })
     const menu = await getMenu(state.id)
     const postId = state.postId
     const boardId = state.boardId
-    const comment = (await getScanPostDetail(state.scanSessionId, postId)).comments?.find(c => c.externalId == commentId)
-    
+    const comment = (await getScanPostDetail(state.scanSession.id, postId)).comments?.find(c => c.externalId == commentId)
+    await updateUserState(userId, { commentContent: comment.preview })
     // userStates[userId] = {
     //     ...state,
     //     step: 'viewing_comment_detail'
@@ -299,12 +322,12 @@ export async function viewCommentDetail(ctx, commentId) {
 
     const url = `${process.env.BOARDS_URL}${state.boardId}/${postId}/comments`;
     let detailText = `<b>Comentario #${commentId}</b> en `;
-    detailText += `'${state.content}'\n\n`;
+    detailText += `'${state.content.slice(0,100)}'\n\n`;
     detailText += `${comment.preview.slice(0, 1000).replace(/</g, "&lt;").replace(/>/g, "&gt;")} ${comment.preview.length > 1000 ? ' (...)' : ''}`;
     detailText += `\n\n<a href="${url}">Ver en la web</a>`;
 
     const buttons = Markup.inlineKeyboard([
-        [Markup.button.callback('Resp', `reply_comment_${postId}_${boardId}`)],
+        [Markup.button.callback('Resp', `reply_comment_${commentId}_${boardId}`)],
         [Markup.button.callback('⬅ Volver a la lista', `back_list`)]
     ]);
 

@@ -7,6 +7,9 @@ export async function updateUserState(userId, patch) {
         create: {
             userId,
             ...patch
+        },
+        include: {
+            scanSession: true
         }
     })
 
@@ -16,7 +19,10 @@ export async function updateUserState(userId, patch) {
 
 export async function getUserState(userId) {
     const userState = await prisma.user_States.findUnique({
-        where: { userId }
+        where: { userId },
+        include: {
+            scanSession: true
+        }
     })
 
     return userState

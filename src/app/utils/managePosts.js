@@ -30,7 +30,7 @@ export async function setMyPostsForState(userStateId, messages, ttlMinutes = 10)
     await prisma.managePosts.createMany({
         data: messages.map(msg => ({
             externalId: msg.id.toString(),
-            preview: makePreview(msg.content),
+            preview: msg.content,
             userStateId,
             boardId: msg.boardId,
             expiresAt

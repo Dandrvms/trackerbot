@@ -4,7 +4,7 @@ import { prisma } from "@/libs/prisma"
 import { generateSalt, deriveSecretKey } from "@/app/utils/utils";
 import { makePreview } from "../utils/managePosts";
 
-async function getSalt(user){
+async function getSalt(user) {
     const salt = await prisma.users.findFirst({
         where: { chat_id: user },
         select: { salt: true }
@@ -21,16 +21,16 @@ async function getSalt(user){
     return salt.salt;
 }
 
-export async function post(content, boardId, pin, user, userStateId) {
+export async function post(content, boardId, pin, user, userStateId, scanSessionId) {
 
-    
+
     const salt = await getSalt(user);
     const derivedKey = deriveSecretKey(pin, salt);
 
     console.log(`Usuario ${user} con PIN ${pin}`);
-    console.log(`Enviando post al tablón ${boardId}: ${content}`);    
+    console.log(`Enviando post al tablón ${boardId}: ${content}`);
 
-    const response = await fetch(`${process.env.WEB_URL}/api/bot/post`,{
+    const response = await fetch(`${process.env.WEB_URL}/api/bot/post`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -43,7 +43,7 @@ export async function post(content, boardId, pin, user, userStateId) {
             derivedKey: derivedKey,
         })
     })
-    
+
     const data = await response.json();
 
     if (response.status != 200) {
@@ -56,12 +56,23 @@ export async function post(content, boardId, pin, user, userStateId) {
     await prisma.managePosts.create({
         data: {
             externalId: String(data.id),
-            preview: makePreview(data.content),
+            preview: data.content,
             userStateId,
             boardId,
             expiresAt,
         }
     })
+
+    // if (scanSessionId) {
+    //     await prisma.scanPost.create({
+    //         data: {
+    //             sessionId: scanSessionId,
+    //             externalId: String(data.id),
+    //             boardId: boardId,
+    //             preview: data.content
+    //         }
+    //     })
+    // }
 
 
 

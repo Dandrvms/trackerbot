@@ -8,18 +8,29 @@ export async function GET(request) {
         return new NextResponse('No autorizado', { status: 401 });
     }
 
+    const minutes15ago = new Date(Date.now() - 15 * 60 * 1000)
+
     try {
-        const deleted = await prisma.userSession.deleteMany({
-            where: {
-                expires: {
-                    lt: new Date(), 
-                },
-            },
-        });
+ 
+
+        const [sessions, states] = await prisma.$transaction([
+            prisma.userSession.deleteMany({
+                where: {
+                    expires: { lt: new Date() }
+                }
+            }),
+            prisma.user_States.deleteMany({
+                where: {
+                    createdAt: { lt: minutes15ago }
+                }
+            })
+        ]);
+
+        const deletedCount = sessions.count + states.count
 
         return NextResponse.json({ 
             success: true, 
-            deletedCount: deleted.count,
+            deletedCount: deletedCount,
             timestamp: new Date().toISOString()
         });
     } catch (error) {

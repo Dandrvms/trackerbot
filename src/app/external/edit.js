@@ -39,7 +39,7 @@ export async function edit(content, postId, userStateId) {
                 }
             },
             data: {
-                preview: makePreview(content)
+                preview: content
             }
         })
 

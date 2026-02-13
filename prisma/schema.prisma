@@ -22,6 +22,7 @@ model ManagePosts {
     externalId          String
     preview             String
     userStateId         Int
+    userState           User_States @relation(fields: [userStateId], references: [id], onDelete: Cascade)
     expiresAt           DateTime
     boardId             String
 
@@ -58,11 +59,13 @@ model User_States {
     step                String?
     previousStep        String?
     menus               Menus[]
-    scanSessionId       Int?          @unique
-    scanSession         ScanSession? @relation(fields: [scanSessionId], references: [id])
+    scanSession         ScanSession?
+    managedPosts        ManagePosts[]
     postId              Int?
     boardId             String?
     content             String?
+    commentContent      String?
+    commentId           Int?
     updatedAt           DateTime     @updatedAt
     createdAt           DateTime     @default(now())
 }
@@ -74,7 +77,7 @@ model Menus {
     type                String
     isActive            Boolean     @default(true)
     userStateId         Int
-    userState           User_States @relation(fields: [userStateId], references: [id])
+    userState           User_States @relation(fields: [userStateId], references: [id], onDelete: Cascade)
     createdAt           DateTime    @default(now())
 }
 
@@ -82,8 +85,8 @@ model ScanSession {
     id                  Int      @id @default(autoincrement())
     createdAt           DateTime @default(now())
     expiresAt           DateTime
-    userStateId         Int
-    userState           User_States?
+    userStateId         Int     @unique
+    userState           User_States @relation(fields: [userStateId], references: [id], onDelete: Cascade)
 
     scanPosts           ScanPost[]
 
@@ -93,13 +96,13 @@ model ScanSession {
 model ScanPost {
     id                  Int    @id @default(autoincrement())
     sessionId           Int
-
+    boardId             String @default("")
     externalId          String        
     preview             String  
 
     comments            ScanComment[]
 
-    session             ScanSession @relation(fields: [sessionId], references: [id])
+    session             ScanSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
     @@index([sessionId])
 }
@@ -112,7 +115,7 @@ model ScanComment {
     externalId          String
     preview             String
 
-    post                ScanPost @relation(fields: [postId], references: [id])
+    post                ScanPost @relation(fields: [postId], references: [id], onDelete: Cascade)
 
     @@index([postId])
 }

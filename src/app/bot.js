@@ -11,10 +11,12 @@ import myposts from "@/app/commands/myposts.js";
 import trackall from '@/app/commands/trackall';
 import untrackall from '@/app/commands/untrackall'
 import scan from '@/app/commands/scan'
+import delcache from './commands/delcache';
 import { handleInput } from '@/app/utils/utils';
 import { handleNavigation } from '@/app/commands/myposts.js';
 import { handleNotifications } from '@/app/utils/notifyUtils';
 import { handleScan } from '@/app/commands/scan';
+import { setUpDeleteCache } from './commands/delcache';
 const token = process.env.TELEGRAM_BOT_TOKEN;
 
 if (!token) {
@@ -41,6 +43,7 @@ handleInput(bot)
 handleNavigation(bot)
 handleNotifications(bot)
 handleScan(bot)
+setUpDeleteCache(bot)
 console.log("Bot inicializado con éxito");
 
 
@@ -56,5 +59,6 @@ bot.command('myposts', myposts);
 bot.command('trackall', trackall)
 bot.command('untrackall', untrackall)
 bot.command('scan', scan)
+bot.command('delcache', delcache)
 
 export default bot;

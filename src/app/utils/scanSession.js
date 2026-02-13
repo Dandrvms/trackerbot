@@ -17,13 +17,6 @@ export async function createScanSession(userStateId, ttlMinutes = 10) {
         }
     });
 
-    await prisma.user_States.update({
-        where: { id: userStateId },
-        data: {
-            scanSessionId: session.id
-        }
-    })
-
     return session
 
 
@@ -35,7 +28,8 @@ export async function storeScanData(sessionId, posts) {
         data: posts.map(p => ({
             sessionId,
             externalId: p.id.toString(),
-            preview: p.content.slice(0, 50)
+            boardId: p.boardId,
+            preview: p.content
         }))
     });
 
@@ -59,7 +53,7 @@ export async function storeScanData(sessionId, posts) {
             commentsData.push({
                 postId,
                 externalId: c.id.toString(),
-                preview: c.content.slice(0, 50)
+                preview: c.content
             });
         }
     }
@@ -93,9 +87,9 @@ export async function getActiveScanSession(userId) {
     return state?.scanSession ?? null;
 }
 
-export async function getScanPosts(sessionId) {
+export async function getScanPosts(sessionId, boardId) {
     return prisma.scanPost.findMany({
-        where: { sessionId },
+        where: { sessionId, boardId },
         orderBy: { id: "asc" }
     });
 }

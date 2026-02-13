@@ -97,14 +97,20 @@ async function ReplyPost(ctx, postId, boardId) {
     const state = await getUserState(userId)
     const menu = await getMenu(state.id)
 
+    let text = state.postId ? `${state.postId}. ` : ""
+    text += state.content ? `${state.content}\n.\n.\n` : ""
+    text += state.commentId ? `${state.commentId}. ` : ""
+    text += state.commentContent ? `${state.commentContent}\n\n` : ""
+    text += "Envía el comentario al post. Puedes referenciar otras respuestas con >>:"
+
     const boardMenu = {
-        text: `'${state.content}' \n\nEnvía el comentario al post. Puedes referenciar otras respuestas con >>:`,
+        text: text,
         keyboard: Markup.inlineKeyboard([
             [Markup.button.callback('cancelar', 'cancel')]
         ])
     }
 
-    
+
     // const state = userStates[userId]
     // userStates[userId] = {
     //     ...state,
@@ -122,8 +128,10 @@ async function ReplyPost(ctx, postId, boardId) {
         await ctx.deleteMessage().catch(() => { })
     }
     const sentMsg = await ctx.reply(boardMenu.text, boardMenu.keyboard);
-
-    await updateUserState(userId, { ...patch, step: 'waiting_text_comment', postId: Number(postId), boardId: boardId })
+    state.step === 'viewing_post'
+        ?
+        await updateUserState(userId, { ...patch, step: 'waiting_text_comment', postId: Number(postId), boardId: boardId })
+        : await updateUserState(userId, { ...patch, step: 'waiting_text_comment', commentId: Number(postId), boardId: boardId })
     await replaceMenu(state.id, sentMsg.message_id, { ...menuPatch, type: 'cancel_menu' })
 }
 
@@ -179,7 +187,19 @@ export async function sendComment(ctx) {
             const newState = await updateUserState(userId, { step: state.previousStep, previousStep: null })
             const sentMsg = await ctx.reply('Volviendo al menú anterior...')
             const newMenu = await replaceMenu(state.id, sentMsg.message_id, { type: 'waiting', currentPage: menu.currentPage })
-            newState.step === 'viewing_post' ? await getPosts(ctx, newMenu.currentPage) : await getComments(ctx, newMenu.currentPage)
+
+            if (newState.step === 'viewing_comment_detail') {
+                await updateUserState(String(ctx.from.id), { commentContent: null, commentId: null })
+                await getComments(ctx, newMenu.currentPage)
+            } else {
+                await updateUserState(String(ctx.from.id), { content: null, postId: null })
+                await getPosts(ctx, newMenu.currentPage)
+            }
+
+        }
+
+        if (state.step === 'viewing_comment_detail') {
+            await updateUserState(String(ctx.from.id), { commentContent: null, commentId: null })
         }
     } catch (error) {
         console.log("Error: ", error)
