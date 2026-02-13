@@ -23,18 +23,6 @@ export async function edit(content, postId, userStateId) {
             return { error: "Error al editar el post." }
         }
 
-        await prisma.managePosts.update({
-            where: {
-                externalId_userStateId: { 
-                    externalId: String(postId),
-                    userStateId: userStateId
-                }
-            },
-            data: {
-                preview: content
-            }
-        })
-
         return { success: true }
 
     } catch (error) {

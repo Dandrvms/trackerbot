@@ -28,7 +28,6 @@ export async function comment(postId, content, pin, user) {
     const salt = await getSalt(user);
     const derivedKey = deriveSecretKey(pin, salt);
 
-
     const response = await fetch(`${process.env.WEB_URL}/api/bot/comment`,{
         method: 'POST',
         headers: {

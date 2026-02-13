@@ -50,16 +50,6 @@ export async function post(content, boardId, pin, user, userStateId, scanSession
 
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000)
 
-    await prisma.managePosts.create({
-        data: {
-            externalId: String(data.id),
-            preview: data.content,
-            userStateId,
-            boardId,
-            expiresAt,
-        }
-    })
-
     // if (scanSessionId) {
     //     await prisma.scanPost.create({
     //         data: {

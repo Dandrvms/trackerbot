@@ -27,7 +27,7 @@ export async function handleNotifications(bot) {
         const postId = ctx.match[1]
         const boardId = ctx.match[2]
         console.log("replying post", postId)
-        await ReplyPost(ctx, postId, boardId)
+        await ReplyPost(ctx, postId, boardId, 'from_post')
         safeAnswer(ctx)
     })
 
@@ -35,7 +35,7 @@ export async function handleNotifications(bot) {
         const postId = ctx.match[1]
         const boardId = ctx.match[2]
         console.log("replying comment", postId)
-        await ReplyPost(ctx, postId, boardId)
+        await ReplyPost(ctx, postId, boardId, 'from_comment')
         safeAnswer(ctx)
     })
 
@@ -92,15 +92,19 @@ async function TrackPost(ctx, postId) {
 
 
 
-async function ReplyPost(ctx, postId, boardId) {
+async function ReplyPost(ctx, postId, boardId, type) {
     const userId = String(ctx.from.id)
-    const state = await getUserState(userId)
-    const menu = await getMenu(state.id)
+    let state
+    if (type === 'from_post') state = await updateUserState(userId, { postId: Number(postId), boardId: boardId })
+    else if (type === 'from_comment') state = await updateUserState(userId, { commentId: Number(postId), boardId: boardId})
 
-    let text = state.postId ? `${state.postId}. ` : ""
-    text += state.content ? `${state.content}\n.\n.\n` : ""
-    text += state.commentId ? `${state.commentId}. ` : ""
-    text += state.commentContent ? `${state.commentContent}\n\n` : ""
+
+    const menu = await getMenu(state?.id)
+
+    let text = state?.postId ? `${state.postId}. ` : ""
+    text += state?.content ? `${state.content}\n.\n.\n` : ""
+    text += state?.commentId ? `${state.commentId}. ` : ""
+    text += state?.commentContent ? `${state.commentContent}\n\n` : ""
     text += "Envía el comentario al post. Puedes referenciar otras respuestas con >>:"
 
     const boardMenu = {
@@ -122,13 +126,13 @@ async function ReplyPost(ctx, postId, boardId) {
 
     let patch
     let menuPatch
-    if (state.step === 'viewing_post' || state.step === 'viewing_comment_detail') {
+    if (state?.step === 'viewing_post' || state?.step === 'viewing_comment_detail') {
         patch = { previousStep: state.step }
         menuPatch = { currentPage: menu.currentPage }
         await ctx.deleteMessage().catch(() => { })
     }
     const sentMsg = await ctx.reply(boardMenu.text, boardMenu.keyboard);
-    state.step === 'viewing_post'
+    state?.step === 'viewing_post'
         ?
         await updateUserState(userId, { ...patch, step: 'waiting_text_comment', postId: Number(postId), boardId: boardId })
         : await updateUserState(userId, { ...patch, step: 'waiting_text_comment', commentId: Number(postId), boardId: boardId })
@@ -155,6 +159,7 @@ export async function sendComment(ctx) {
     try {
 
         const { content, postId, boardId } = state
+
 
         const { error, cont, id } = await comment(postId, content, pin, userId.toString())
 
@@ -185,7 +190,7 @@ export async function sendComment(ctx) {
 
         if (state.previousStep) {
             const newState = await updateUserState(userId, { step: state.previousStep, previousStep: null })
-            const sentMsg = await ctx.reply('Volviendo al menú anterior...')
+            const sentMsg = await ctx.reply('Volviendo al menú anterior...sendcomment')
             const newMenu = await replaceMenu(state.id, sentMsg.message_id, { type: 'waiting', currentPage: menu.currentPage })
 
             if (newState.step === 'viewing_comment_detail') {
