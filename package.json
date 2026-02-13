@@ -12,12 +12,12 @@
   "dependencies": {
     "@prisma/client": "^6.15.0",
     "@prisma/extension-accelerate": "^2.0.2",
-    "next": "15.5.2",
+    "next": "^16.1.6",
     "prisma": "^6.15.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "telegraf": "^4.16.3",
-    "vercel": "^46.1.1"
+    "vercel": "^50.17.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

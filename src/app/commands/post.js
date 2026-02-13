@@ -25,7 +25,7 @@ const boardMenu = {
     keyboard: Markup.inlineKeyboard([
         [Markup.button.callback('/webo/', 'post:webo'),
         Markup.button.callback('/meta/', 'post:meta')],
-        [Markup.button.callback('/test/', 'post:test')],
+        // [Markup.button.callback('/test/', 'post:test')],
 
         [Markup.button.callback('cancelar', 'cancel')]
     ])

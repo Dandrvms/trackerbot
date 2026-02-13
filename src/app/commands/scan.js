@@ -14,7 +14,7 @@ const keyboard = Markup.inlineKeyboard([
         Markup.button.callback('/meta/', 'get_meta'),
 
     ],
-    [Markup.button.callback('/test/', 'get_test')],
+    // [Markup.button.callback('/test/', 'get_test')],
     [Markup.button.callback('Cancelar', 'cancel')]
 ]);
 
